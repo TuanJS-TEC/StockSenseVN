@@ -9,7 +9,7 @@ Nhà đầu tư thua lỗ thường không phải vì chọn sai mã. Họ thua 
 | | Trade Plan | Journal |
 | --- | --- | --- |
 | Câu hỏi trả lời | "Tôi sẽ mua ở đâu, sai thì cắt ở đâu, đúng thì chốt ở đâu, mua bao nhiêu?" | "Lần trước tôi làm gì, kết quả ra sao, rút ra được gì?" |
-| Thời điểm | **Trước và trong** giao dịch | **Sau** giao dịch |
+| Thời điểm | **Trước và trong** thời gian theo dõi một ý tưởng | **Sau** khi kết thúc ý tưởng đó |
 | Ai nhập số liệu | Người dùng tự nhập mọi mức giá; hệ thống chỉ tính toán | Hệ thống tự ghi khi đóng kế hoạch; người dùng thêm ghi chú, bài học, thẻ |
 
 Hai chức năng nối với nhau thành một vòng lặp kỷ luật:
@@ -17,7 +17,7 @@ Hai chức năng nối với nhau thành một vòng lặp kỷ luật:
 ```mermaid
 flowchart LR
   A[Lập Trade Plan] --> B[Chờ giá vào vùng]
-  B -->|Cảnh báo chạm vùng vào| C[Người dùng tự đặt lệnh ở công ty chứng khoán<br/>rồi bấm Đã vào lệnh]
+  B -->|Cảnh báo chạm vùng vào| C[Người dùng xác nhận Đã vào lệnh<br/>trên kế hoạch]
   C --> D[Theo dõi]
   D -->|Cảnh báo chạm cắt lỗ / mục tiêu| E[Đóng kế hoạch]
   E -->|Tự động| F[Bản ghi Journal]
@@ -25,7 +25,11 @@ flowchart LR
   G -->|Điều chỉnh cách lập kế hoạch| A
 ```
 
-**Quan trọng:** StockSense VN **không đặt lệnh**. Người dùng mua bán thật ở app của công ty chứng khoán (VPS, SSI, TCBS…). Web chỉ giúp lập kế hoạch, nhắc khi giá chạm mốc và ghi lại kết quả. Mọi màn hình có câu tuyên bố "Trade Plan do bạn tự lập; hệ thống không đưa khuyến nghị đầu tư" (FR-M10-08).
+**Quan trọng:** StockSense VN **chỉ mang tính tham khảo, không có chức năng mua bán**.
+- Web không kết nối công ty chứng khoán, không đặt lệnh, không giữ tiền hay cổ phiếu của người dùng.
+- Trade Plan là **kế hoạch trên giấy**: người dùng ghi lại ý tưởng và theo dõi nó với giá cuối ngày thật từ SSI.
+- "Vào lệnh", "đóng", "lãi/lỗ" trong web đều là **theo kế hoạch**, không phải giao dịch thật. Nếu người dùng giao dịch thật thì làm ở nơi khác và tự chịu trách nhiệm.
+- Mọi màn hình có câu tuyên bố "Trade Plan do bạn tự lập; hệ thống không đưa khuyến nghị đầu tư" (FR-M10-08).
 
 ## 2. Thuật ngữ cần nắm
 
@@ -107,12 +111,12 @@ stateDiagram-v2
 | --- | --- |
 | Nháp | Đang nghĩ, chưa theo dõi |
 | Chờ vào | Đã chốt kế hoạch, chờ giá về vùng vào |
-| Đang mở | Người dùng **đã mua thật** ở công ty chứng khoán và đang nắm giữ |
-| Đã đóng | Đã bán. Lý do: chạm mục tiêu, chạm cắt lỗ hoặc đóng thủ công. Hệ thống tự tạo bản ghi Journal |
+| Đang mở | Người dùng xác nhận kế hoạch **đã vào vùng mua** và bắt đầu theo dõi như đang nắm giữ |
+| Đã đóng | Kết thúc kế hoạch. Lý do: chạm mục tiêu, chạm cắt lỗ hoặc đóng thủ công. Hệ thống tự tạo bản ghi Journal |
 | Đã hủy | Bỏ kế hoạch. Không tạo Journal |
 | Hết hạn | Hệ thống tự chuyển khi qua ngày hết hạn mà vẫn ở Nháp/Chờ vào, kèm thông báo. Trong CSDL lưu `status = cancelled`, `close_reason = expired` |
 
-Nguyên tắc (FR-M10-05): **người dùng xác nhận mọi lần chuyển trạng thái; hệ thống chỉ gợi ý bằng cảnh báo**. Hệ thống không biết người dùng có thật sự đặt lệnh hay không, nên không tự chuyển sang "Đang mở" hay "Đã đóng". Ngoại lệ duy nhất là Hết hạn.
+Nguyên tắc (FR-M10-05): **người dùng xác nhận mọi lần chuyển trạng thái; hệ thống chỉ gợi ý bằng cảnh báo**. Kế hoạch là quyết định của người dùng, nên hệ thống không tự chuyển sang "Đang mở" hay "Đã đóng" thay họ. Ngoại lệ duy nhất là Hết hạn.
 
 ### 3.4 Cảnh báo theo kế hoạch (FR-M10-06)
 
@@ -165,7 +169,7 @@ Lý do: nhật ký chỉ có giá trị khi **kết quả là thật**. Người
 
 ### 4.3 Ví dụ một bản ghi tự động
 
-Tiếp ví dụ FPT ở mục 3.2: người dùng vào lệnh 200 cp, sau đó giá chạm 57.000 và có cảnh báo. Người dùng bán ở 56.000 rồi đóng kế hoạch với lý do "Chạm mục tiêu".
+Tiếp ví dụ FPT ở mục 3.2: người dùng xác nhận vào lệnh với 200 cp theo kế hoạch, sau đó giá chạm 57.000 và có cảnh báo. Người dùng đóng kế hoạch ở giá thoát 56.000 với lý do "Chạm mục tiêu".
 
 | Mục | Giá trị |
 | --- | --- |
@@ -174,7 +178,7 @@ Tiếp ví dụ FPT ở mục 3.2: người dùng vào lệnh 200 cp, sau đó g
 | Kế hoạch gốc | Vùng vào 50.000–51.000, cắt lỗ 47.500, mục tiêu 57.000, lý do ban đầu |
 | Lịch sử sửa | Ví dụ "Cắt lỗ 47.500 → 48.500 ngày 05/11" |
 
-Hiện hệ thống tính lãi/lỗ và R theo **giá "vào từ"** (50.000) vì chưa ghi giá khớp thực tế. Xem mục 6.
+Lãi/lỗ và R là **theo kế hoạch**, tính từ giá "vào từ" (50.000) và giá thoát người dùng nhập. Đây không phải lãi/lỗ của giao dịch thật, nên không có phí, thuế hay giá khớp.
 
 Sau đó người dùng viết Bài học, ví dụ "Bán sớm hơn mục tiêu 1.000 vì sợ giảm, vẫn đạt 2,4R", và gắn thẻ "kỷ luật".
 
@@ -205,29 +209,21 @@ Sau đó người dùng viết Bài học, ví dụ "Bán sớm hơn mục tiêu
 
 ## 6. Điểm cần lưu ý và cần nhóm thống nhất
 
-Những điểm dưới đây là chỗ web hiện tại **khác với thực tế giao dịch ở Việt Nam** hoặc còn hở về nghiệp vụ. Cần nhóm quyết định trước khi sửa code.
+Web chỉ mang tính tham khảo, nên lãi/lỗ là **theo kế hoạch**: không tính phí, thuế, giá khớp hay chu kỳ thanh toán, và không cần nối với giao dịch thật. Tuy vậy, kế hoạch vẫn nên **hợp lý với thị trường Việt Nam** để việc nhìn lại có ý nghĩa. Các điểm dưới đây cần nhóm quyết định trước khi sửa code.
 
 1. **Hướng "Bán" (short).**
-   - Hiện tại: web cho lập kế hoạch Bán, tức kiếm lời khi giá giảm.
-   - Thực tế: thị trường cơ sở Việt Nam **chưa cho nhà đầu tư cá nhân bán khống cổ phiếu**. Chỉ bán được cổ phiếu đang có.
-   - Đề xuất: bỏ lựa chọn Bán, hoặc chỉ giữ cho phái sinh (ngoài phạm vi hiện tại).
-2. **Chưa ghi giá khớp thực tế khi vào lệnh.**
-   - Hiện tại: nút "Đã vào lệnh" không hỏi mua giá bao nhiêu, bao nhiêu cổ phiếu, nên lãi/lỗ và R tính theo giá "vào từ".
-   - Đề xuất: khi bấm "Đã vào lệnh" thì hỏi giá khớp và khối lượng thật.
-3. **Trade Plan và Portfolio chưa nối với nhau.**
-   - Hiện tại: vào lệnh hay đóng kế hoạch đều không tạo giao dịch trong Portfolio, nên người dùng phải nhập hai lần.
-   - Đề xuất: khi xác nhận vào lệnh hoặc đóng kế hoạch, cho chọn "ghi luôn vào Portfolio".
-4. **Chu kỳ thanh toán.**
-   - Thực tế: cổ phiếu mua hôm nay đến chiều ngày T+2 mới về tài khoản và bán được.
-   - Hệ quả: nếu giá chạm cắt lỗ ngay phiên sau khi mua, người dùng vẫn chưa bán được, nhưng web vẫn cảnh báo.
-   - Đề xuất: ghi chú trong cảnh báo, hoặc cảnh báo "chưa bán được do cổ phiếu chưa về".
-5. **Phí và thuế.**
-   - Thực tế: mỗi lần mua bán có phí giao dịch (khoảng 0,1–0,3%), và khi bán có thuế 0,1% trên giá bán.
-   - Hiện tại: lãi/lỗ của kế hoạch chưa trừ hai khoản này.
-6. **Biên độ và bước giá.**
-   - Hiện tại: giá cắt lỗ/mục tiêu nhập tự do.
-   - Đề xuất: kiểm tra giá có hợp lệ theo bước giá của sàn không (HOSE: 10/50/100 đồng tùy mức giá), và cảnh báo khi mục tiêu vượt xa biên độ ngày (±7% HOSE).
-7. **Dữ liệu cuối ngày.** Cảnh báo chỉ đến sau 15:30, dựa trên giá cao/thấp của cả phiên. Cần nói rõ với người dùng rằng đây không phải lệnh dừng lỗ tự động.
+   - Hiện tại: web cho lập kế hoạch Bán, tức kỳ vọng kiếm lời khi giá giảm.
+   - Thực tế: thị trường cơ sở Việt Nam **chưa cho nhà đầu tư cá nhân bán khống cổ phiếu**, nên kế hoạch kiểu này không phản ánh được điều người dùng có thể làm.
+   - Đề xuất: bỏ lựa chọn Bán, chỉ giữ kế hoạch Mua.
+2. **Bước giá.**
+   - Hiện tại: giá vào, cắt lỗ, mục tiêu nhập tự do, ví dụ 50.123 vẫn được nhận.
+   - Đề xuất: kiểm tra giá theo bước giá của sàn (HOSE: 10/50/100 đồng tùy mức giá; HNX/UPCoM: 100 đồng). Web đã có sẵn hàm `tickSize` dùng cho bảng giá.
+3. **Dữ liệu cuối ngày.**
+   - Cảnh báo chỉ đến sau 15:30, dựa trên giá cao/thấp của cả phiên.
+   - Cần ghi rõ trên trang Trade Plan rằng đây là **nhắc theo dõi**, không phải lệnh dừng lỗ hay chốt lời tự động.
+4. **Lãi/lỗ "theo kế hoạch".**
+   - Màn hình và PDF đang ghi là "Lãi/lỗ".
+   - Đề xuất: đổi nhãn thành "Lãi/lỗ theo kế hoạch" để người dùng không hiểu nhầm là tiền thật.
 
 ## 7. Phần sẽ có khi có mô hình AI
 
