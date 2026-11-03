@@ -408,3 +408,14 @@ a.brand { text-decoration: none; color: inherit; }
   background: var(--ink); color: var(--surface); box-shadow: 0 6px 24px rgb(0 0 0 / 0.22); font-size: 13px; }
 .toast .btn { background: transparent; color: inherit; border-color: transparent; }
 @media (max-width: 760px) { .toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
+
+/* Lucide icons. Containers that size their own svg (nav, buttons, search, disclaimer) override width/height. */
+.ic { width: 1em; height: 1em; flex: none; vertical-align: -0.125em; stroke: currentColor; fill: none; stroke-width: 2; }
+.ic-filled { fill: currentColor; }
+.ic-sort { width: 12px; height: 12px; margin-left: 2px; vertical-align: -1px; stroke-width: 2.5; }
+.watch-star .ic { width: 18px; height: 18px; vertical-align: middle; stroke-width: 1.8; }
+.watch-dot .ic { width: 12px; height: 12px; margin-right: 3px; vertical-align: -1px; }
+.lab .ic, .fc-label .ic, .chip .ic { width: 1.05em; height: 1.05em; stroke-width: 2.4; }
+.plegend .ic { width: 12px; height: 12px; stroke-width: 2.6; }
+.toast .ic { width: 15px; height: 15px; }
+.btn .ic { margin-right: 2px; }

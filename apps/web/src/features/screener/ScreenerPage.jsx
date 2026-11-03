@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
 import { navigate } from '../../app/navigation.js';
 import { NOT_ANALYSED, openSymbol } from '../../app/symbolAccess.js';
-import { Disclaimer } from '../../app/icons.jsx';
+import { Disclaimer, Icon } from '../../app/icons.jsx';
 
 const money = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
@@ -80,7 +80,7 @@ export function ScreenerPage() {
     const next = { ...filters, sort: key, direction: filters.sort === key && filters.direction === 'desc' ? 'asc' : 'desc' };
     setFilters(next); run(next);
   }
-  const sortMark = (key) => (filters.sort === key ? (filters.direction === 'asc' ? ' ▲' : ' ▼') : '');
+  const sortMark = (key) => filters.sort === key && <Icon name={filters.direction === 'asc' ? 'sort-asc' : 'sort-desc'} className="ic-sort" />;
 
   return <main className="content">
     <div className="pagehead"><div><h1>Screener</h1><p>Lọc các mã theo sàn, ngành, giá và thanh khoản. Kết quả là danh sách sàng lọc, không phải bảng xếp hạng nên mua.</p></div></div>
@@ -132,7 +132,7 @@ export function ScreenerPage() {
           <td className="r num hide-sm">{number.format(item.averageTurnover20d / 1e9)}</td>
           <td className="hide-sm">{item.priceDataStatus === 'live' ? <span className="chip up">SSI {item.priceDate ? new Date(`${item.priceDate}T00:00:00`).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : ''}</span> : <span className="chip hold">Minh họa</span>}</td>
           <td><div className="actions">
-            {canWatch && <button className="btn sm" type="button" disabled={watchlist.has(item.symbol)} onClick={() => addToWatchlist(item.symbol)}>{watchlist.has(item.symbol) ? '★ Đang theo dõi' : '+ Watchlist'}</button>}
+            {canWatch && <button className="btn sm" type="button" disabled={watchlist.has(item.symbol)} onClick={() => addToWatchlist(item.symbol)}>{watchlist.has(item.symbol) ? <><Icon name="star" filled /> Đang theo dõi</> : <><Icon name="plus" /> Watchlist</>}</button>}
             {canPlan && <button className="btn sm" type="button" onClick={() => navigate(`/plans?symbol=${encodeURIComponent(item.symbol)}`)}>Lập kế hoạch</button>}
           </div></td></tr>)}
         {!items.length && !loading && <tr><td colSpan="7" className="muted">Không có mã khớp bộ lọc.</td></tr>}</tbody></table></div>

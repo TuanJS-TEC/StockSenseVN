@@ -65,12 +65,12 @@ export function SymbolDetailPage({ symbol }) {
   const goBack = () => { if (window.history.length > 1) window.history.back(); else navigate('/board'); };
 
   if (loading) return <main className="content"><div className="card muted">Đang tải dữ liệu {symbol}…</div></main>;
-  if (error) return <main className="content"><div><button className="btn sm" type="button" onClick={goBack}>← Quay lại</button></div><div className="note bad" role="alert">{error}</div></main>;
+  if (error) return <main className="content"><div><button className="btn sm" type="button" onClick={goBack}><Icon name="back" />Quay lại</button></div><div className="note bad" role="alert">{error}</div></main>;
   if (!data) return null;
   if (data.limited) {
     const { detail } = data;
     return <main className="content">
-      <div><button className="btn sm" type="button" onClick={goBack}>← Quay lại</button></div>
+      <div><button className="btn sm" type="button" onClick={goBack}><Icon name="back" />Quay lại</button></div>
       <section className="card">
         <h1 style={{ margin: 0 }}>{detail.symbol} <small className="muted" style={{ fontSize: 14, fontWeight: 400 }}>{detail.name}</small></h1>
         <p className="muted small">{detail.exchange}{detail.industry ? ` · ${detail.industry}` : ''}{detail.indices?.length ? ` · ${detail.indices.join(', ')}` : ''}</p>
@@ -92,7 +92,7 @@ export function SymbolDetailPage({ symbol }) {
   const closeTone = quote.tones.close;
 
   return <main className="content">
-    <div><button className="btn sm" type="button" onClick={goBack}>← Quay lại</button></div>
+    <div><button className="btn sm" type="button" onClick={goBack}><Icon name="back" />Quay lại</button></div>
     <div className="dhead">
       <div><div className="small muted">{detail.exchange}{detail.industry ? ` · ${detail.industry}` : ''}</div>
         <h1 style={{ fontSize: 28 }}>{detail.symbol} <span style={{ fontWeight: 500, fontSize: 16 }} className="muted">{detail.name}</span></h1>

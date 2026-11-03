@@ -3,7 +3,7 @@ import { api } from '../../api/index.js';
 import { NOT_ANALYSED, SYMBOL_GROUPS, inGroup, openSymbol } from '../../app/symbolAccess.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
-import { Disclaimer } from '../../app/icons.jsx';
+import { Disclaimer, Icon } from '../../app/icons.jsx';
 import { MiniLab } from '../../components/forecast.jsx';
 
 const price = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
@@ -84,7 +84,7 @@ export function PriceBoardPage() {
           <th>T+2</th><th>T+5</th>
         </tr></thead>
         <tbody>{rows.map((row) => <tr key={row.symbol} className="click symbol-row" tabIndex={0} onClick={() => open(row)} onKeyDown={(event) => { if (event.key === 'Enter') open(row); }}>
-          <td><span className={`sym ${tone(row.tones.close)}`}>{watchlist.has(row.symbol) && <span className="watch-dot" title="Trong watchlist">★ </span>}{row.symbol}<small>{row.exchange}{row.industry ? ` · ${row.industry}` : ''}</small></span></td>
+          <td><span className={`sym ${tone(row.tones.close)}`}>{watchlist.has(row.symbol) && <span className="watch-dot" title="Trong watchlist"><Icon name="star" filled /></span>}{row.symbol}<small>{row.exchange}{row.industry ? ` · ${row.industry}` : ''}</small></span></td>
           <td className="r num tone-ref">{row.reference == null ? '—' : price.format(row.reference)}</td>
           <td className="r num tone-ceiling">{row.ceiling == null ? '—' : price.format(row.ceiling)}</td>
           <td className="r num tone-floor">{row.floor == null ? '—' : price.format(row.floor)}</td>
@@ -114,6 +114,6 @@ export function PriceBoardPage() {
 function Sort({ label, sortKey, sort, onSort, align = '' }) {
   const active = sort.key === sortKey;
   return <th className={align} aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
-    <button type="button" className="sort-button" onClick={() => onSort(sortKey)}>{label}{active ? (sort.direction === 'asc' ? ' ▲' : ' ▼') : ''}</button>
+    <button type="button" className="sort-button" onClick={() => onSort(sortKey)}>{label}{active && <Icon name={sort.direction === 'asc' ? 'sort-asc' : 'sort-desc'} className="ic-sort" />}</button>
   </th>;
 }

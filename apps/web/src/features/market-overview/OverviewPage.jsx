@@ -3,14 +3,14 @@ import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
 import { NOT_ANALYSED, SYMBOL_GROUPS, inGroup, openSymbol } from '../../app/symbolAccess.js';
-import { Disclaimer } from '../../app/icons.jsx';
+import { Disclaimer, Icon } from '../../app/icons.jsx';
 import { Confidence, MiniLab } from '../../components/forecast.jsx';
 
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
 const money = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const LIQUIDITY_OPTIONS = [['', 'Mọi thanh khoản'], ['10000000000', 'GTGD ≥ 10 tỷ'], ['50000000000', 'GTGD ≥ 50 tỷ'], ['100000000000', 'GTGD ≥ 100 tỷ']];
 const SORTS = { symbol: (item) => item.symbol, closePrice: (item) => item.closePrice, changePercent: (item) => item.changePercent, averageTurnover20d: (item) => item.averageTurnover20d };
-const LABEL_TEXT = { up: '▲ Tăng', hold: '● Đi ngang', down: '▼ Giảm' };
+const LABEL_TEXT = { up: 'Tăng', hold: 'Đi ngang', down: 'Giảm' };
 
 function formatChange(value) {
   return `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(2).replace('.', ',')}%`;
@@ -85,11 +85,11 @@ export function OverviewPage() {
       {data.status.state === 'demo' && <span className="chip info">Dự báo đang là dữ liệu mẫu</span>}</div>
     <section className="strip">
       {['VNINDEX', 'HNX'].map((code) => { const item = index(code); return <div key={code}><div className="k">{item?.label ?? code}</div><div className="v num">{item ? number.format(item.value) : '—'}</div>
-        {item && <div className={`small num ${changeClass(item.changePoints)}`}>{item.changePoints >= 0 ? '▲' : '▼'} {item.changePoints > 0 ? '+' : ''}{number.format(item.changePoints)} ({formatChange(item.changePercent)})</div>}
+        {item && <div className={`small num ${changeClass(item.changePoints)}`}><Icon name={item.changePoints >= 0 ? 'index-up' : 'index-down'} /> {item.changePoints > 0 ? '+' : ''}{number.format(item.changePoints)} ({formatChange(item.changePercent)})</div>}
           {item && <div className="small muted">{item.source === 'ssi' ? `SSI · ${formatDay(item.date)}` : 'Dữ liệu mẫu'}</div>}</div>; })}
       <div><div className="k">Độ rộng {breadth.scope === 'tracked' ? `(${breadth.total} mã theo dõi)` : 'thị trường'}</div><div className="v num" style={{ fontSize: 16 }}><span className="c-up">{breadth.advances}</span> · <span className="c-hold">{breadth.nochanges}</span> · <span className="c-down">{breadth.declines}</span></div>
         <div className="breadth"><i className="bg-up" style={{ flex: breadth.advances }} /><i className="bg-hold" style={{ flex: breadth.nochanges }} /><i className="bg-down" style={{ flex: breadth.declines }} /></div></div>
-      <div><div className="k">Tỷ lệ nhãn T+5 ({analysed || '—'} mã)</div>{canReadSymbols ? <><div className="v num" style={{ fontSize: 16 }}><span className="c-up">▲ {count('up')}</span> · <span className="c-hold">● {count('hold')}</span> · <span className="c-down">▼ {count('down')}</span></div>
+      <div><div className="k">Tỷ lệ nhãn T+5 ({analysed || '—'} mã)</div>{canReadSymbols ? <><div className="v num" style={{ fontSize: 16 }}><span className="c-up"><Icon name="up" /> {count('up')}</span> · <span className="c-hold"><Icon name="hold" /> {count('hold')}</span> · <span className="c-down"><Icon name="down" /> {count('down')}</span></div>
         <div className="breadth"><i className="bg-up" style={{ flex: count('up') }} /><i className="bg-hold" style={{ flex: count('hold') }} /><i className="bg-down" style={{ flex: count('down') }} /></div></> : <div className="small muted">Không áp dụng cho vai trò này</div>}</div>
     </section>
 
@@ -113,7 +113,7 @@ export function OverviewPage() {
           <th>T+2</th><th>T+5</th><th className="hide-sm">Tin cậy T+5</th>
         </tr></thead>
         <tbody>{rows.map((item) => <tr key={item.symbol} className="click symbol-row" tabIndex={0} onClick={() => openSymbol(item.symbol, item.analysisEnabled)} onKeyDown={(event) => { if (event.key === 'Enter') openSymbol(item.symbol, item.analysisEnabled); }}>
-          {canWatch && <td><button type="button" className={`watch-star ${watchlist.has(item.symbol) ? 'on' : ''}`} onClick={(event) => toggleWatch(event, item.symbol)} aria-pressed={watchlist.has(item.symbol)} aria-label={watchlist.has(item.symbol) ? `Bỏ ${item.symbol} khỏi watchlist` : `Thêm ${item.symbol} vào watchlist`}>{watchlist.has(item.symbol) ? '★' : '☆'}</button></td>}
+          {canWatch && <td><button type="button" className={`watch-star ${watchlist.has(item.symbol) ? 'on' : ''}`} onClick={(event) => toggleWatch(event, item.symbol)} aria-pressed={watchlist.has(item.symbol)} aria-label={watchlist.has(item.symbol) ? `Bỏ ${item.symbol} khỏi watchlist` : `Thêm ${item.symbol} vào watchlist`}><Icon name="star" filled={watchlist.has(item.symbol)} /></button></td>}
           <td><span className="sym">{item.symbol}<small className="hide-sm">{item.name}</small></span></td>
           <td className="hide-sm muted">{item.exchange}{item.industry ? ` · ${item.industry}` : ''}</td>
           <td className="r num">{money.format(item.closePrice)}</td>
@@ -126,7 +126,7 @@ export function OverviewPage() {
         </tr>)}
         {!rows.length && <tr><td colSpan={canWatch ? 9 : 8} className="muted">Không có mã khớp bộ lọc.</td></tr>}</tbody>
       </table></div>
-      <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap' }} className="small muted"><span>Bấm tiêu đề cột để sắp xếp</span><span>☆ thêm nhanh vào watchlist</span><span>“Chỉ giá”: mã chưa có phân tích sâu</span><span>Hiển thị {rows.length}/{items.length} mã</span></div>
+      <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap' }} className="small muted"><span>Bấm tiêu đề cột để sắp xếp</span><span><Icon name="star" /> thêm nhanh vào watchlist</span><span>“Chỉ giá”: mã chưa có phân tích sâu</span><span>Hiển thị {rows.length}/{items.length} mã</span></div>
     </section> : <div className="note info">Vai trò quản trị xem trạng thái thị trường và mô hình; danh sách mã và dự báo dành cho người dùng cuối.</div>}
     <Disclaimer />
   </main>;
@@ -140,6 +140,6 @@ const conflict = (item) => {
 function SortHeader({ label, sortKey, sort, onSort, align = '' }) {
   const active = sort.key === sortKey;
   return <th className={align} aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
-    <button type="button" className="sort-button" onClick={() => onSort(sortKey)}>{label}{active ? (sort.direction === 'asc' ? ' ▲' : ' ▼') : ''}</button>
+    <button type="button" className="sort-button" onClick={() => onSort(sortKey)}>{label}{active && <Icon name={sort.direction === 'asc' ? 'sort-asc' : 'sort-desc'} className="ic-sort" />}</button>
   </th>;
 }

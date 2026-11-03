@@ -104,7 +104,7 @@ function NoticeToast() {
     return () => { window.clearTimeout(timer); window.removeEventListener('stocksense:notice', show); };
   }, []);
   if (!message) return null;
-  return <div className="toast" role="status" aria-live="polite"><span>{message}</span><button type="button" className="btn sm" onClick={() => setMessage('')} aria-label="Đóng thông báo">✕</button></div>;
+  return <div className="toast" role="status" aria-live="polite"><span>{message}</span><button type="button" className="btn sm" onClick={() => setMessage('')} aria-label="Đóng thông báo"><Icon name="close" /></button></div>;
 }
 
 export function AppShell({ children }) {

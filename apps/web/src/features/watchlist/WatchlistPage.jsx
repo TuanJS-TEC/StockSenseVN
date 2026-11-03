@@ -80,7 +80,7 @@ export function WatchlistPage() {
           <td><input className="note-input" maxLength="500" aria-label={`Ghi chú ${item.symbol}`} placeholder="Thêm ghi chú" value={noteDrafts[item.symbol] ?? ''} onChange={(event) => setNoteDrafts({ ...noteDrafts, [item.symbol]: event.target.value })} onBlur={() => saveNote(item.symbol)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></td>
           <td><button className="btn sm" type="button" disabled={busy} onClick={() => perform(() => api.watchlist.remove(item.symbol), `Đã bỏ ${item.symbol} khỏi watchlist.`)}>Bỏ</button></td>
         </tr>; })}
-        {!watchlist.length && <tr><td colSpan="7" className="muted">Watchlist đang trống. Thêm mã, hoặc bấm ☆ ở trang Tổng quan.</td></tr>}</tbody></table></div>
+        {!watchlist.length && <tr><td colSpan="7" className="muted">Watchlist đang trống. Thêm mã, hoặc bấm <Icon name="star" /> ở trang Tổng quan.</td></tr>}</tbody></table></div>
     </section>
 
     <div className="grid g2">
