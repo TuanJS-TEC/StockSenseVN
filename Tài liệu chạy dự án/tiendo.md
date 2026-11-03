@@ -1,6 +1,6 @@
 # Báo cáo tiến độ: StockSense VN so với PRD v0.0.4 / SDD v0.0.5
 
-Ngày lập: 25/10/2026 · **Cập nhật lần cuối: 31/10/2026: nạp 5 năm giá (27/10/2021 → 30/10/2026) gồm giá đã điều chỉnh cho 15 mã và 3 chỉ số; danh sách mã đổi thành 15 mã HOSE do nhóm mô hình chốt (bỏ 4 mã HNX, 3 mã UPCoM; thêm STB, MSN, VPB, VRE, TCB). Trước đó 30/10/2026 (Chat chế độ không dùng mô hình ngôn ngữ, chỉ số thị trường thật, lịch nghỉ lễ, trạng thái dữ liệu; bảng giá và biểu đồ nến).**
+Ngày lập: 25/10/2026 · **Cập nhật lần cuối: 03/11/2026: mở rộng lên 30 mã theo dõi; thêm 15 mã chỉ hiện giá (BID, CTG, HDB, VHM, PLX, SAB, VJC, GVR, DGC, PNJ, REE, KDH, SHS, PVS, IDC) với 5 năm giá (1.250 phiên đến 02/11/2026); bộ lọc nhóm VN30/VN100/HOSE/HNX30/HNX ở Tổng quan, Bảng giá, Screener; mã chưa phân tích hiện thông báo "Hệ thống chưa hỗ trợ phân tích sâu mã này". Trước đó 31/10/2026: nạp 5 năm giá (27/10/2021 → 30/10/2026) gồm giá đã điều chỉnh cho 15 mã và 3 chỉ số; danh sách mã đổi thành 15 mã HOSE do nhóm mô hình chốt (bỏ 4 mã HNX, 3 mã UPCoM; thêm STB, MSN, VPB, VRE, TCB). Trước đó 30/10/2026 (Chat chế độ không dùng mô hình ngôn ngữ, chỉ số thị trường thật, lịch nghỉ lễ, trạng thái dữ liệu; bảng giá và biểu đồ nến).**
 
 Phạm vi: đối chiếu toàn bộ **115 yêu cầu chức năng (FR-M0 → FR-M14)** trong `PRODUCT_REQUIREMENTS_DOCUMENT_v0.0.4.md` với code trong `apps/` và `packages/`. Yêu cầu phi chức năng (NFR), kiến trúc trong SDD và các tài liệu đề xuất bổ sung không được tính vào tỷ lệ phần trăm.
 
@@ -136,7 +136,7 @@ Ký hiệu: ✅ Đạt · 🟡 Một phần · ❌ Chưa làm. Cột "Ghi chú" 
 | M1-03 Tín hiệu T+2/T+5 | 🟡 | Dữ liệu dự báo mẫu |
 | M1-04 Sắp xếp + tìm kiếm | 🟡 | Đã sắp xếp theo thanh khoản, %, giá; thiếu sắp xếp theo xác suất (cần AI) |
 | M1-05 Ngày dữ liệu, giờ cập nhật | ✅ | |
-| M1-06 Dải chỉ số, độ rộng, tỷ lệ theo nhãn | 🟡 | VN-Index, HNX-Index, VN30 thật từ SSI (market_index_daily); độ rộng tính trên 15 mã theo dõi; tỷ lệ theo nhãn cần AI |
+| M1-06 Dải chỉ số, độ rộng, tỷ lệ theo nhãn | 🟡 | VN-Index, HNX-Index, VN30 thật từ SSI (market_index_daily); độ rộng tính trên 30 mã theo dõi; tỷ lệ theo nhãn cần AI |
 | M1-07 Tín hiệu đổi hôm nay | ❌ | Cần AI |
 
 ### M2. Forecast card & chi tiết mã — 3/9

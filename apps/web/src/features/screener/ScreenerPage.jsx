@@ -3,11 +3,12 @@ import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
 import { navigate } from '../../app/navigation.js';
+import { NOT_ANALYSED, openSymbol } from '../../app/symbolAccess.js';
 import { Disclaimer } from '../../app/icons.jsx';
 
 const money = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
-const initialFilters = { exchange: '', industry: '', minPrice: '', maxPrice: '', minChange: '', maxChange: '', minTurnover: '', sort: 'turnover', direction: 'desc' };
+const initialFilters = { exchange: '', index: '', industry: '', minPrice: '', maxPrice: '', minChange: '', maxChange: '', minTurnover: '', sort: 'turnover', direction: 'desc' };
 // FR-M8-03: ready-made filters. They use price and liquidity only until forecasts come from a real model.
 const PRESETS = [
   ['Thanh khoản cao', { minTurnover: '100000000000', sort: 'turnover', direction: 'desc' }],
@@ -94,6 +95,7 @@ export function ScreenerPage() {
       <div className="seg">{PRESETS.map(([label, preset_], index) => <button key={label} type="button" className={preset === index ? 'on' : ''} onClick={() => apply(preset_, index)}>{label}</button>)}</div>
       <form onSubmit={(event) => { event.preventDefault(); setPreset(null); run(); }}>
         <div className="frow" style={{ marginTop: 14 }}>
+          <div className="field"><label htmlFor="sc-g">Nhóm chỉ số</label><select id="sc-g" value={filters.index} onChange={(event) => update('index', event.target.value)}><option value="">Tất cả</option><option>VN30</option><option>VN100</option><option>HNX30</option></select></div>
           <div className="field"><label htmlFor="sc-e">Sàn</label><select id="sc-e" value={filters.exchange} onChange={(event) => update('exchange', event.target.value)}><option value="">Tất cả</option><option>HOSE</option><option>HNX</option><option>UPCOM</option></select></div>
           <div className="field"><label htmlFor="sc-i">Ngành</label><select id="sc-i" value={filters.industry} onChange={(event) => update('industry', event.target.value)}><option value="">Tất cả</option>{industries.map((item) => <option key={item}>{item}</option>)}</select></div>
           <div className="field"><label htmlFor="sc-p1">Giá từ</label><input id="sc-p1" type="number" min="0" value={filters.minPrice} onChange={(event) => update('minPrice', event.target.value)} /><span className="hint">đồng</span></div>
@@ -123,7 +125,7 @@ export function ScreenerPage() {
         <th className="r hide-sm"><button type="button" className="sort-button" onClick={() => sortBy('turnover')}>GTGD TB20 (tỷ){sortMark('turnover')}</button></th>
         <th className="hide-sm">Dữ liệu</th><th /></tr></thead>
         <tbody>{items.map((item) => <tr key={item.symbol}>
-          <td className="sym" style={{ cursor: 'pointer' }} onClick={() => navigate(`/symbols/${item.symbol}`)}>{item.symbol}<small>{item.exchange}</small></td>
+          <td className="sym" style={{ cursor: 'pointer' }} onClick={() => openSymbol(item.symbol, item.analysisEnabled)}>{item.symbol}<small>{item.exchange}{item.indices?.length ? ` · ${item.indices[0]}` : ''}</small>{item.analysisEnabled === false && <span className="chip no-analysis" title={NOT_ANALYSED}>Chỉ giá</span>}</td>
           <td className="hide-sm muted">{item.industry ?? '—'}</td>
           <td className="r num">{money.format(item.closePrice)}</td>
           <td className={`r num ${changeClass(item.changePercent)}`}>{formatChange(item.changePercent)}</td>

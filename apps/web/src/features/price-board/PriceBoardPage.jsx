@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.js';
-import { navigate } from '../../app/navigation.js';
+import { NOT_ANALYSED, SYMBOL_GROUPS, inGroup, openSymbol } from '../../app/symbolAccess.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
 import { Disclaimer } from '../../app/icons.jsx';
@@ -21,7 +21,7 @@ export function PriceBoardPage() {
   const canWatch = hasCapability(user.role, 'watchlist.manage.self');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [exchange, setExchange] = useState('all');
+  const [group, setGroup] = useState('all');
   const [industry, setIndustry] = useState('');
   const [query, setQuery] = useState('');
   const [onlyWatch, setOnlyWatch] = useState(false);
@@ -39,32 +39,32 @@ export function PriceBoardPage() {
   const rows = useMemo(() => {
     if (!data) return [];
     const needle = query.trim().toUpperCase();
-    const filtered = data.items.filter((row) => (exchange === 'all' || row.exchange === exchange)
+    const filtered = data.items.filter((row) => inGroup(row, group)
       && (!industry || row.industry === industry)
       && (!onlyWatch || watchlist.has(row.symbol))
       && (!needle || row.symbol.includes(needle) || row.name.toUpperCase().includes(needle)));
     const value = SORTS[sort.key];
     const factor = sort.direction === 'asc' ? 1 : -1;
     return filtered.sort((a, b) => factor * (sort.key === 'symbol' ? value(a).localeCompare(value(b)) : value(a) - value(b)));
-  }, [data, exchange, industry, query, onlyWatch, watchlist, sort]);
+  }, [data, group, industry, query, onlyWatch, watchlist, sort]);
 
   if (error) return <main className="content"><div className="note bad" role="alert">{error}</div></main>;
   if (!data) return <main className="content"><div className="card muted">Đang tải bảng giá…</div></main>;
 
   const industries = [...new Set(data.items.map((row) => row.industry).filter(Boolean))].sort();
-  const exchanges = ['all', ...['HOSE', 'HNX', 'UPCOM'].filter((code) => data.items.some((row) => row.exchange === code))];
+  const groups = SYMBOL_GROUPS.filter(([value]) => data.items.some((row) => inGroup(row, value)));
   const count = (t) => data.items.filter((row) => row.tones.close === t).length;
   const sortBy = (key) => setSort((current) => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' }));
-  const open = (symbol) => navigate(`/symbols/${symbol}`);
+  const open = (row) => openSymbol(row.symbol, row.analysisEnabled);
 
   return <main className="content">
     <div className="pagehead"><div><h1>Bảng giá</h1>
-      <p>Giá cuối ngày của {data.items.length} mã đang theo dõi, phiên {data.date ? new Date(`${data.date}T00:00:00`).toLocaleDateString('vi-VN') : '—'}. Bấm vào một mã để xem biểu đồ và chi tiết.</p></div>
+      <p>Giá cuối ngày của {data.items.length} mã đang theo dõi, phiên {data.date ? new Date(`${data.date}T00:00:00`).toLocaleDateString('vi-VN') : '—'}. Bấm vào một mã có dự báo để xem biểu đồ và phân tích.</p></div>
       <div className="board-breadth small num"><span className="tone-ceiling">Trần {count('ceiling')}</span><span className="tone-up">Tăng {count('up')}</span><span className="tone-ref">Đứng {count('ref')}</span><span className="tone-down">Giảm {count('down')}</span><span className="tone-floor">Sàn {count('floor')}</span></div></div>
 
     <section className="card">
       <div className="card-h">
-        <div className="seg">{exchanges.map((value) => <button key={value} type="button" className={exchange === value ? 'on' : ''} onClick={() => setExchange(value)}>{value === 'all' ? 'Tất cả' : value}</button>)}</div>
+        <div className="seg" role="group" aria-label="Nhóm mã">{groups.map(([value, label]) => <button key={value} type="button" className={group === value ? 'on' : ''} onClick={() => setGroup(value)}>{label}</button>)}</div>
         <div className="actions">
           <div className="field" style={{ flexDirection: 'row' }}><input type="search" aria-label="Tìm mã" placeholder="Tìm mã hoặc tên" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
           <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Lọc theo ngành" value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="">Mọi ngành</option>{industries.map((item) => <option key={item}>{item}</option>)}</select></div>
@@ -83,7 +83,7 @@ export function PriceBoardPage() {
           <Sort label="GTGD (tỷ)" sortKey="turnover" sort={sort} onSort={sortBy} align="r" />
           <th>T+2</th><th>T+5</th>
         </tr></thead>
-        <tbody>{rows.map((row) => <tr key={row.symbol} className="click symbol-row" tabIndex={0} onClick={() => open(row.symbol)} onKeyDown={(event) => { if (event.key === 'Enter') open(row.symbol); }}>
+        <tbody>{rows.map((row) => <tr key={row.symbol} className="click symbol-row" tabIndex={0} onClick={() => open(row)} onKeyDown={(event) => { if (event.key === 'Enter') open(row); }}>
           <td><span className={`sym ${tone(row.tones.close)}`}>{watchlist.has(row.symbol) && <span className="watch-dot" title="Trong watchlist">★ </span>}{row.symbol}<small>{row.exchange}{row.industry ? ` · ${row.industry}` : ''}</small></span></td>
           <td className="r num tone-ref">{row.reference == null ? '—' : price.format(row.reference)}</td>
           <td className="r num tone-ceiling">{row.ceiling == null ? '—' : price.format(row.ceiling)}</td>
@@ -96,8 +96,9 @@ export function PriceBoardPage() {
           <td className={`r num ${tone(row.tones.low)}`}>{row.low == null ? '—' : price.format(row.low)}</td>
           <td className="r num">{row.volume == null ? '—' : price.format(row.volume)}</td>
           <td className="r num">{row.turnover == null ? '—' : billions.format(row.turnover / 1e9)}</td>
-          <td><MiniLab forecast={row.forecasts?.t2} /></td>
-          <td><MiniLab forecast={row.forecasts?.t5} /></td>
+          {row.analysisEnabled === false ? <td colSpan={2} title={NOT_ANALYSED}><span className="chip no-analysis">Chỉ giá</span></td> : <>
+            <td><MiniLab forecast={row.forecasts?.t2} /></td>
+            <td><MiniLab forecast={row.forecasts?.t5} /></td></>}
         </tr>)}
         {!rows.length && <tr><td colSpan="14" className="muted">Không có mã khớp bộ lọc.</td></tr>}</tbody>
       </table></div>

@@ -3,6 +3,7 @@ import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
 import { navigate } from '../../app/navigation.js';
+import { openSymbol } from '../../app/symbolAccess.js';
 import { Disclaimer, Icon } from '../../app/icons.jsx';
 import { Modal } from '../../app/Modal.jsx';
 import { PriceChart } from '../symbol-detail/PriceChart.jsx';
@@ -127,7 +128,7 @@ export function PortfolioPage() {
     {history.length > 1 && <section className="card chart"><div className="card-h"><h2>Giá trị danh mục · {history.length} phiên</h2><span className="small muted">tối đa 180 ngày gần nhất</span></div><PriceChart items={history} /></section>}
     <section className="card"><div className="card-h"><h2>Vị thế</h2><span className="small muted">Tỷ trọng theo giá trị thị trường</span></div>
       <div className="tw"><table><thead><tr><th>Mã</th><th className="hide-sm">Ngành</th><th className="r">KL</th><th className="r">Giá vốn BQ</th><th className="r">Giá đóng cửa</th><th className="r">Lãi/lỗ tạm tính</th><th className="r">Tỷ trọng</th></tr></thead>
-        <tbody>{positions.map((item) => { const pct = item.unrealized_pnl != null && item.average_cost ? item.unrealized_pnl / (item.quantity * item.average_cost) * 100 : null; return <tr key={item.symbol} className="click" onClick={() => navigate(`/symbols/${item.symbol}`)}>
+        <tbody>{positions.map((item) => { const pct = item.unrealized_pnl != null && item.average_cost ? item.unrealized_pnl / (item.quantity * item.average_cost) * 100 : null; return <tr key={item.symbol} className="click" onClick={() => openSymbol(item.symbol)}>
           <td className="sym">{item.symbol}</td><td className="hide-sm muted">{item.industry ?? '—'}</td><td className="r num">{quantityFormat.format(item.quantity)}</td><td className="r num">{money.format(item.average_cost)}</td>
           <td className="r num">{item.market_price == null ? '—' : money.format(item.market_price)}</td>
           <td className={`r num ${changeClass(item.unrealized_pnl ?? 0)}`}>{item.unrealized_pnl == null ? '—' : <>{signed(item.unrealized_pnl)} <span className="small">({pct >= 0 ? '+' : '−'}{Math.abs(pct).toFixed(1).replace('.', ',')}%)</span></>}</td>

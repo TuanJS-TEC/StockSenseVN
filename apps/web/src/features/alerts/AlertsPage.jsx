@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api/index.js';
 import { navigate } from '../../app/navigation.js';
+import { openSymbol } from '../../app/symbolAccess.js';
 
 const dateTime = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
 const TYPE_LABELS = {
@@ -41,7 +42,8 @@ export function AlertInbox() {
   async function open(alert) {
     try { if (!alert.read_at) { await api.alerts.markRead(alert.id); notifyAlertsChanged(); } } catch { /* opening still works */ }
     const target = targetOf(alert);
-    if (target) navigate(target);
+    if (target && target === `/symbols/${alert.symbol}`) openSymbol(alert.symbol);
+    else if (target) navigate(target);
   }
 
   const unread = alerts.filter((alert) => !alert.read_at).length;

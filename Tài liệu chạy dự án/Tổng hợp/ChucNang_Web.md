@@ -1,18 +1,21 @@
 # StockSense VN (IDSS) – Chức năng web đã có
 
-Cập nhật: 31/10/2026. Tổng hợp những gì web đang làm được, theo module của PRD v0.0.4 và theo vai trò. Chi tiết chấm điểm từng yêu cầu ở `tiendo.md`; cấu trúc CSDL ở `CSDL_StockSenseVN.sql`; luồng xử lý ở `UseCase_BieuDoTuanTu.md`.
+Cập nhật: 03/11/2026. Tổng hợp những gì web đang làm được, theo module của PRD v0.0.4 và theo vai trò. Chi tiết chấm điểm từng yêu cầu ở `tiendo.md`; cấu trúc CSDL ở `CSDL_StockSenseVN.sql`; luồng xử lý ở `UseCase_BieuDoTuanTu.md`.
 
 ## 1. Tóm tắt
 
 - **Mức hoàn thành so với PRD:** 67/115 yêu cầu chức năng ≈ 58% (không tính app mobile: 67/110 ≈ 61%). Mọi chức năng không cần mô hình AI đã chạy; phần còn lại chờ mô hình dự báo, mô hình cảm xúc tin, mô hình ngôn ngữ cho Chat, hoặc app mobile (GĐ3).
 - **Dữ liệu thật trong CSDL:**
-  - 15 mã HOSE do nhóm mô hình chốt: FPT, VNM, STB, ACB, SSI, VIC, HPG, VCB, MSN, MBB, GAS, MWG, VPB, VRE, TCB.
-  - Giá ngày 5 năm (27/10/2021 → 30/10/2026), 1.249 phiên mỗi mã, gồm giá khớp và giá đã điều chỉnh (chia cổ tức bằng cổ phiếu, thưởng, tách).
+  - 30 mã theo dõi:
+    - 15 mã HOSE có phân tích mô hình: FPT, VNM, STB, ACB, SSI, VIC, HPG, VCB, MSN, MBB, GAS, MWG, VPB, VRE, TCB.
+    - 15 mã chỉ hiện giá: BID, CTG, HDB, VHM, PLX, SAB, VJC, GVR (VN30), DGC, PNJ, REE, KDH (VN100), SHS, PVS, IDC (HNX30, sàn HNX).
+  - Rổ VN30, VN100, HNX30 là danh sách cố định (bảng `index_memberships`), dùng cho bộ lọc nhóm.
+  - Giá ngày 5 năm (27/10/2021 → 02/11/2026), 1.250 phiên mỗi mã, gồm giá khớp và giá đã điều chỉnh (chia cổ tức bằng cổ phiếu, thưởng, tách).
   - Chỉ số VN-Index, VN30 (1.249 phiên), HNX-Index (1.246 phiên; nguồn SSI thiếu 3 phiên).
   - 11.233 bài tin từ 01/01/2021 (CafeF theo mã, CafeF chuyên mục, VnExpress): tiêu đề, thời gian, link bài gốc.
   - 60 ngày nghỉ của sàn 2022–2027.
 - **Dữ liệu còn là mẫu:** dự báo T+2/T+5 và tỷ lệ nhãn (chờ mô hình); sắc thái tin (đang để "trung tính").
-- **Công nghệ:** React 19 + Vite (web), Node.js 22 + Fastify 5 (API), Node.js worker (đồng bộ dữ liệu, thông báo), PostgreSQL 17, TradingView Lightweight Charts (biểu đồ nến), pdfkit (PDF), nodemailer + Gmail SMTP, Telegram Bot. 98 kiểm thử tự động.
+- **Công nghệ:** React 19 + Vite (web), Node.js 22 + Fastify 5 (API), Node.js worker (đồng bộ dữ liệu, thông báo), PostgreSQL 17, TradingView Lightweight Charts (biểu đồ nến), pdfkit (PDF), nodemailer + Gmail SMTP, Telegram Bot. 99 kiểm thử tự động.
 
 ## 2. Chức năng theo module
 
@@ -37,8 +40,9 @@ Ký hiệu: ✅ chạy đầy đủ · 🟡 chạy một phần · ❌ chưa có
 
 | Chức năng | Mức |
 | --- | --- |
-| Danh sách 15 mã: giá đóng cửa, % thay đổi, ngành, GTGD bình quân 20 phiên; lọc sàn/ngành/thanh khoản; sắp xếp; tìm kiếm | ✅ |
-| Dải thị trường: VN-Index, HNX-Index thật từ SSI; độ rộng tăng/đứng/giảm trên 15 mã | ✅ |
+| Danh sách 30 mã: giá đóng cửa, % thay đổi, ngành, GTGD bình quân 20 phiên; lọc nhóm (Tất cả, VN30, VN100, HOSE, HNX30, HNX), ngành, thanh khoản; sắp xếp; tìm kiếm | ✅ |
+| Mã chưa có phân tích mô hình: nhãn "Chỉ giá"; bấm vào (cả từ tìm kiếm, watchlist, portfolio, cảnh báo) hiện thông báo "Hệ thống chưa hỗ trợ phân tích sâu mã này", không mở trang chi tiết | ✅ |
+| Dải thị trường: VN-Index, HNX-Index thật từ SSI; độ rộng tăng/đứng/giảm trên 30 mã | ✅ |
 | Ngày dữ liệu giá và ngày dự báo ở đầu trang | ✅ |
 | Cột dự báo T+2/T+5, tỷ lệ nhãn, lọc/sắp theo dự báo, khối "tín hiệu đổi hôm nay" | 🟡 dữ liệu mẫu / ❌ |
 
@@ -46,10 +50,10 @@ Ký hiệu: ✅ chạy đầy đủ · 🟡 chạy một phần · ❌ chưa có
 
 | Chức năng | Mức |
 | --- | --- |
-| 15 mã với tham chiếu, trần, sàn, đóng cửa, +/−, %, mở/cao/thấp, tổng khối lượng, giá trị, dự báo T+2/T+5 | ✅ |
+| 30 mã với tham chiếu, trần, sàn, đóng cửa, +/−, %, mở/cao/thấp, tổng khối lượng, giá trị, dự báo T+2/T+5 | ✅ |
 | Màu theo quy ước: tím trần, xanh lam sàn, vàng tham chiếu, xanh tăng, đỏ giảm; tổng số mã trần/tăng/đứng/giảm/sàn | ✅ |
 | Trần/sàn theo biên độ và bước giá từng sàn; tham chiếu đúng cả ngày giao dịch không hưởng quyền | ✅ |
-| Lọc sàn, ngành, tìm mã, chỉ watchlist, sắp xếp; bấm mã mở trang chi tiết | ✅ |
+| Lọc nhóm (VN30, VN100, HOSE, HNX30, HNX), ngành, tìm mã, chỉ watchlist, sắp xếp; bấm mã có phân tích mở trang chi tiết | ✅ |
 | Dữ liệu trong phiên, sổ lệnh, khối ngoại, đặt lệnh | ❌ (ngoài phạm vi) |
 
 ### M2. Trang chi tiết mã
@@ -103,7 +107,7 @@ Ký hiệu: ✅ chạy đầy đủ · 🟡 chạy một phần · ❌ chưa có
 
 | Chức năng | Mức |
 | --- | --- |
-| Lọc theo sàn, ngành, giá, % thay đổi, thanh khoản; sắp xếp; bộ lọc có sẵn | ✅ |
+| Lọc theo nhóm chỉ số (VN30, VN100, HNX30), sàn, ngành, giá, % thay đổi, thanh khoản; sắp xếp; bộ lọc có sẵn | ✅ |
 | Lưu bộ lọc có tên (Trader, Analyst) | ✅ |
 | Thêm watchlist, mở chi tiết, lập Trade Plan từ kết quả; tuyên bố "không phải xếp hạng nên mua" | ✅ |
 | Điều kiện theo nhãn, xác suất, hit rate | ❌ cần mô hình |

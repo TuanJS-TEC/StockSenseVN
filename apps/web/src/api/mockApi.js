@@ -181,6 +181,7 @@ export const mockApi = {
         const latest = { date: marketMock.status.dataDate, open: previousClose, high: Math.max(previousClose, item.closePrice),
           low: Math.min(previousClose, item.closePrice), close: item.closePrice, volume: null, turnover: null };
         return { symbol: item.symbol, name: item.name, exchange: item.exchange, industry: item.industry,
+          indices: item.indices, analysisEnabled: item.analysisEnabled,
           ...buildBoardQuote(item.exchange, latest, { close: previousClose }),
           forecasts: { t2: item.forecasts?.t2 ?? null, t5: item.forecasts?.t5 ?? null }, priceDataStatus: 'demo' };
       });
@@ -193,6 +194,7 @@ export const mockApi = {
       await delay();
       const items = marketMock.symbols.items.filter((item) =>
         (!filters.exchange || item.exchange === filters.exchange) &&
+        (!filters.index || item.indices.includes(filters.index)) &&
         (filters.minPrice === '' || filters.minPrice == null || item.closePrice >= Number(filters.minPrice)) &&
         (filters.maxPrice === '' || filters.maxPrice == null || item.closePrice <= Number(filters.maxPrice)) &&
         (filters.minChange === '' || filters.minChange == null || item.changePercent >= Number(filters.minChange)) &&

@@ -191,6 +191,7 @@ export function createChatAssistant(deps) {
   async function forecast(symbol, result) {
     const [detail, status] = await Promise.all([deps.market.symbol(symbol), deps.market.status()]);
     const t2 = detail?.forecasts?.t2; const t5 = detail?.forecasts?.t5;
+    if (detail && detail.analysisEnabled === false) return result('forecast', `Hệ thống chưa hỗ trợ phân tích sâu mã này (${symbol}); hiện chỉ có giá cuối ngày trên Bảng giá.`);
     if (!t2?.label && !t5?.label) return result('forecast', `${NO_DATA} Chưa có dự báo cho ${symbol}.`);
     const describe = (name, f) => {
       if (!f?.label) return `${name}: chưa có`;

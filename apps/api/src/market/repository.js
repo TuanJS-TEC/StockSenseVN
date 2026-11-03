@@ -6,6 +6,10 @@ const number = (value) => value === null || value === undefined ? null : Number(
 const RANGE_MONTHS = { '1m': 1, '3m': 3, '6m': 6, '1y': 12, all: 600 };
 export const PRICE_RANGES = Object.keys(RANGE_MONTHS);
 // SSI index code -> code and label used by the web overview strip.
+// Index baskets of a symbol, VN30 first (fixed lists in index_memberships).
+const INDICES_SQL = `ARRAY(SELECT m.index_code FROM index_memberships m WHERE m.symbol = s.symbol
+  ORDER BY array_position(ARRAY['VN30','VN100','HNX30'], m.index_code)) AS indices`;
+export const INDEX_GROUPS = ['VN30', 'VN100', 'HNX30'];
 const INDEX_CODES = { VNINDEX: ['VNINDEX', 'VN-Index'], HNXINDEX: ['HNX', 'HNX-Index'], VN30: ['VN30', 'VN30'] };
 
 export function createFixtureMarketRepository() {
@@ -23,6 +27,7 @@ export function createFixtureMarketRepository() {
     async screener(filters = {}) {
       const { items } = await this.symbols({ exchange: filters.exchange ?? '' });
       const matches = items.filter((item) =>
+        (!filters.index || item.indices.includes(filters.index)) &&
         (!filters.industry || item.industry === filters.industry) &&
         (filters.minPrice == null || item.closePrice >= filters.minPrice) &&
         (filters.maxPrice == null || item.closePrice <= filters.maxPrice) &&
@@ -40,6 +45,7 @@ export function createFixtureMarketRepository() {
         const latest = { date: marketMock.status.dataDate, open: previousClose, high: Math.max(previousClose, item.closePrice),
           low: Math.min(previousClose, item.closePrice), close: item.closePrice, volume: null, turnover: null };
         return { symbol: item.symbol, name: item.name, exchange: item.exchange, industry: item.industry,
+          indices: item.indices, analysisEnabled: item.analysisEnabled,
           ...buildBoardQuote(item.exchange, latest, { close: previousClose }),
           forecasts: { t2: item.forecasts?.t2 ?? null, t5: item.forecasts?.t5 ?? null }, priceDataStatus: 'demo' };
       });
@@ -164,7 +170,7 @@ export function createPostgresMarketRepository(pool) {
       return { total: items.length, items };
     },
     async screener(filters = {}) {
-      const { rows } = await pool.query(`SELECT s.symbol, s.name, s.exchange, s.industry,
+      const { rows } = await pool.query(`SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL},
           price.close_price, price.change_percent, price.average_turnover_20d,
           price.trade_date::text AS price_date, price.source AS price_source
         FROM symbols s
@@ -188,11 +194,13 @@ export function createPostgresMarketRepository(pool) {
           AND ($5::numeric IS NULL OR price.change_percent <= $5)
           AND ($6::numeric IS NULL OR price.average_turnover_20d >= $6)
           AND ($7 = '' OR s.industry = $7)
+          AND ($8 = '' OR EXISTS (SELECT 1 FROM index_memberships m WHERE m.symbol = s.symbol AND m.index_code = $8))
         ORDER BY s.symbol LIMIT 1000`, [filters.exchange ?? '', filters.minPrice ?? null,
         filters.maxPrice ?? null, filters.minChange ?? null, filters.maxChange ?? null,
-        filters.minTurnover ?? null, filters.industry ?? '']);
+        filters.minTurnover ?? null, filters.industry ?? '', filters.index ?? '']);
       const items = rows.map((row) => ({
         symbol: row.symbol, name: row.name, exchange: row.exchange, industry: row.industry,
+        indices: row.indices, analysisEnabled: row.analysis_enabled,
         closePrice: number(row.close_price), changePercent: number(row.change_percent) ?? 0,
         averageTurnover20d: number(row.average_turnover_20d) ?? 0,
         priceDate: row.price_date, priceDataStatus: row.price_source === 'ssi' ? 'live' : 'demo',
@@ -207,7 +215,7 @@ export function createPostgresMarketRepository(pool) {
     // End-of-day price board: last two bars per enabled symbol give reference, ceiling and floor.
     async board() {
       const { rows } = await pool.query(`WITH latest AS (SELECT id FROM market_batches ORDER BY data_date DESC, id DESC LIMIT 1)
-        SELECT s.symbol, s.name, s.exchange, s.industry, bars.items AS bars,
+        SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL}, bars.items AS bars,
           f2.label AS t2_label, f2.probability_up AS t2_up, f2.probability_hold AS t2_hold, f2.probability_down AS t2_down, f2.confidence AS t2_confidence,
           f5.label AS t5_label, f5.probability_up AS t5_up, f5.probability_hold AS t5_hold, f5.probability_down AS t5_down, f5.confidence AS t5_confidence
         FROM symbols s
@@ -231,8 +239,9 @@ export function createPostgresMarketRepository(pool) {
         probabilities: { up: number(row[`${h}_up`]), hold: number(row[`${h}_hold`]), down: number(row[`${h}_down`]) } } : null);
       const items = rows.map((row) => ({
         symbol: row.symbol, name: row.name, exchange: row.exchange, industry: row.industry,
+        indices: row.indices, analysisEnabled: row.analysis_enabled,
         ...buildBoardQuote(row.exchange, toBar(row.bars[0]), toBar(row.bars[1])),
-        forecasts: { t2: forecast(row, 't2'), t5: forecast(row, 't5') },
+        forecasts: row.analysis_enabled ? { t2: forecast(row, 't2'), t5: forecast(row, 't5') } : { t2: null, t5: null },
         priceDataStatus: row.bars[0].source === 'ssi' ? 'live' : 'demo',
       }));
       const date = items.reduce((max, item) => (item.date && item.date > max ? item.date : max), '');
@@ -276,13 +285,14 @@ export function createPostgresMarketRepository(pool) {
 }
 
 const symbolSelect = `WITH latest AS (SELECT id FROM market_batches ORDER BY data_date DESC, id DESC LIMIT 1)
-  SELECT s.symbol, s.name, s.exchange, s.industry, latest.id AS batch_id,
+  SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL}, latest.id AS batch_id,
     f2.label AS t2_label, f2.probability_up AS t2_up, f2.probability_hold AS t2_hold, f2.probability_down AS t2_down, f2.confidence AS t2_confidence,
     f5.label AS t5_label, f5.probability_up AS t5_up, f5.probability_hold AS t5_hold, f5.probability_down AS t5_down, f5.confidence AS t5_confidence,
     price.close_price, price.price_date, price.price_source, price.change_percent, price.average_turnover_20d
   FROM symbols s CROSS JOIN latest
-  JOIN forecasts f2 ON f2.symbol = s.symbol AND f2.batch_id = latest.id AND f2.horizon = 't2'
-  JOIN forecasts f5 ON f5.symbol = s.symbol AND f5.batch_id = latest.id AND f5.horizon = 't5'
+  -- Display-only symbols have no forecasts, so these joins are optional.
+  LEFT JOIN forecasts f2 ON f2.symbol = s.symbol AND f2.batch_id = latest.id AND f2.horizon = 't2'
+  LEFT JOIN forecasts f5 ON f5.symbol = s.symbol AND f5.batch_id = latest.id AND f5.horizon = 't5'
   LEFT JOIN LATERAL (
     SELECT p.close AS close_price, p.trade_date::text AS price_date, p.source AS price_source,
       CASE WHEN previous.close IS NULL OR previous.close = 0 THEN 0
@@ -299,13 +309,14 @@ const symbolSelect = `WITH latest AS (SELECT id FROM market_batches ORDER BY dat
 function mapSymbol(row) {
   return {
     symbol: row.symbol, name: row.name, exchange: row.exchange, industry: row.industry,
+    indices: row.indices ?? [], analysisEnabled: row.analysis_enabled,
     closePrice: number(row.close_price) ?? 0,
     priceDate: row.price_date ?? null,
     priceDataStatus: row.price_source === 'ssi' ? 'live' : row.price_source ? 'demo' : 'unavailable',
     changePercent: number(row.change_percent) ?? 0,
     averageTurnover20d: number(row.average_turnover_20d) ?? 0,
     dataStatus: 'complete',
-    forecasts: {
+    forecasts: !row.analysis_enabled || !row.t2_label ? null : {
       t2: { label: row.t2_label, probabilities: { up: number(row.t2_up), hold: number(row.t2_hold), down: number(row.t2_down) }, confidence: row.t2_confidence },
       t5: { label: row.t5_label, probabilities: { up: number(row.t5_up), hold: number(row.t5_hold), down: number(row.t5_down) }, confidence: row.t5_confidence },
     },

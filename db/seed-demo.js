@@ -52,13 +52,14 @@ try {
     summary.labelDistribution.up, summary.labelDistribution.hold, summary.labelDistribution.down]);
 
   for (const item of marketMock.symbols.items) {
-    await client.query(`INSERT INTO symbols(symbol, name, exchange, industry, currency, is_enabled)
-      VALUES ($1, $2, $3, $4, 'VND', true)
+    await client.query(`INSERT INTO symbols(symbol, name, exchange, industry, currency, is_enabled, analysis_enabled)
+      VALUES ($1, $2, $3, $4, 'VND', true, $5)
       ON CONFLICT (symbol) DO UPDATE SET name=EXCLUDED.name, exchange=EXCLUDED.exchange, industry=EXCLUDED.industry,
-        currency=EXCLUDED.currency, is_enabled=EXCLUDED.is_enabled, updated_at=now()`,
-    [item.symbol, item.name, item.exchange, item.industry]);
+        currency=EXCLUDED.currency, is_enabled=EXCLUDED.is_enabled, analysis_enabled=EXCLUDED.analysis_enabled, updated_at=now()`,
+    [item.symbol, item.name, item.exchange, item.industry, item.analysisEnabled]);
 
-    for (const horizon of ['t2', 't5']) {
+    // Display-only symbols have no forecasts.
+    for (const horizon of item.forecasts ? ['t2', 't5'] : []) {
       const forecast = item.forecasts[horizon];
       await client.query(`INSERT INTO forecasts
         (batch_id, symbol, horizon, label, probability_up, probability_hold, probability_down, confidence)
@@ -99,7 +100,7 @@ try {
     // Sample news only for symbols without real articles, so it never mixes with CafeF/VnExpress news.
     const { rows: realNews } = await client.query(`SELECT EXISTS (SELECT 1 FROM news_item_symbols l JOIN news_items n ON n.id = l.news_item_id
       WHERE l.symbol = $1 AND n.source <> 'StockSense Demo') AS has_real`, [item.symbol]);
-    for (const article of realNews[0].has_real ? [] : news) {
+    for (const article of realNews[0].has_real || !item.analysisEnabled ? [] : news) {
       const insertedNews = await client.query(`INSERT INTO news_items(symbol, external_id, title, summary, source, published_at, sentiment, url)
         VALUES ($1, $2, $3, $4, 'StockSense Demo', $5, $6, NULL)
         ON CONFLICT (source, external_id) DO UPDATE SET title=EXCLUDED.title, summary=EXCLUDED.summary,
@@ -109,6 +110,9 @@ try {
         VALUES ($1, $2, 'demo_seed') ON CONFLICT DO NOTHING`, [insertedNews.rows[0].id, item.symbol]);
     }
   }
+
+  // Forecasts left over from earlier symbol lists must not show for symbols the model does not analyse.
+  await client.query('DELETE FROM forecasts f USING symbols s WHERE s.symbol = f.symbol AND NOT s.analysis_enabled');
 
   // Symbols outside the tracked list are disabled (not deleted) so their price history and user data stay intact.
   const disabled = await client.query(`UPDATE symbols SET is_enabled=false, updated_at=now()

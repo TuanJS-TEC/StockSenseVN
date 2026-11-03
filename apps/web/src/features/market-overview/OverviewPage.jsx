@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
-import { navigate } from '../../app/navigation.js';
+import { NOT_ANALYSED, SYMBOL_GROUPS, inGroup, openSymbol } from '../../app/symbolAccess.js';
 import { Disclaimer } from '../../app/icons.jsx';
 import { Confidence, MiniLab } from '../../components/forecast.jsx';
 
@@ -25,7 +25,7 @@ export function OverviewPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [exchange, setExchange] = useState('all');
+  const [group, setGroup] = useState('all');
   const [industry, setIndustry] = useState('');
   const [trend, setTrend] = useState('');
   const [minTurnover, setMinTurnover] = useState('');
@@ -59,14 +59,14 @@ export function OverviewPage() {
 
   const rows = useMemo(() => {
     if (!data) return [];
-    const filtered = data.symbols.items.filter((item) => (exchange === 'all' || item.exchange === exchange)
+    const filtered = data.symbols.items.filter((item) => inGroup(item, group)
       && (!industry || item.industry === industry)
       && (!trend || item.forecasts?.t5?.label === trend)
       && (!minTurnover || item.averageTurnover20d >= Number(minTurnover)));
     const value = SORTS[sort.key];
     const factor = sort.direction === 'asc' ? 1 : -1;
     return filtered.sort((a, b) => factor * (sort.key === 'symbol' ? value(a).localeCompare(value(b)) : value(a) - value(b)));
-  }, [data, exchange, industry, trend, minTurnover, sort]);
+  }, [data, group, industry, trend, minTurnover, sort]);
   const industries = useMemo(() => [...new Set((data?.symbols.items ?? []).map((item) => item.industry).filter(Boolean))].sort(), [data]);
 
   if (loading) return <main className="content"><div className="card muted">Đang tải dữ liệu tổng quan…</div></main>;
@@ -77,10 +77,11 @@ export function OverviewPage() {
   const count = (label) => items.filter((item) => item.forecasts?.t5?.label === label).length;
   const index = (code) => data.summary.indices.find((item) => item.code === code);
   const breadth = data.summary.breadth;
-  const exchanges = ['all', ...['HOSE', 'HNX', 'UPCOM'].filter((code) => items.some((item) => item.exchange === code))];
+  const groups = SYMBOL_GROUPS.filter(([value]) => items.some((item) => inGroup(item, value)));
+  const analysed = items.filter((item) => item.analysisEnabled !== false).length;
 
   return <main className="content">
-    <div className="pagehead"><div><h1>Tổng quan thị trường</h1><p>Dự báo xu hướng T+2 và T+5 cho {canReadSymbols ? items.length : ''} mã thanh khoản cao, tính lại mỗi ngày sau phiên.</p></div>
+    <div className="pagehead"><div><h1>Tổng quan thị trường</h1><p>{canReadSymbols ? `${items.length} mã theo dõi; dự báo xu hướng T+2 và T+5 cho ${analysed} mã, tính lại mỗi ngày sau phiên.` : 'Dự báo xu hướng T+2 và T+5, tính lại mỗi ngày sau phiên.'}</p></div>
       {data.status.state === 'demo' && <span className="chip info">Dự báo đang là dữ liệu mẫu</span>}</div>
     <section className="strip">
       {['VNINDEX', 'HNX'].map((code) => { const item = index(code); return <div key={code}><div className="k">{item?.label ?? code}</div><div className="v num">{item ? number.format(item.value) : '—'}</div>
@@ -88,14 +89,14 @@ export function OverviewPage() {
           {item && <div className="small muted">{item.source === 'ssi' ? `SSI · ${formatDay(item.date)}` : 'Dữ liệu mẫu'}</div>}</div>; })}
       <div><div className="k">Độ rộng {breadth.scope === 'tracked' ? `(${breadth.total} mã theo dõi)` : 'thị trường'}</div><div className="v num" style={{ fontSize: 16 }}><span className="c-up">{breadth.advances}</span> · <span className="c-hold">{breadth.nochanges}</span> · <span className="c-down">{breadth.declines}</span></div>
         <div className="breadth"><i className="bg-up" style={{ flex: breadth.advances }} /><i className="bg-hold" style={{ flex: breadth.nochanges }} /><i className="bg-down" style={{ flex: breadth.declines }} /></div></div>
-      <div><div className="k">Tỷ lệ nhãn T+5 ({items.length || '—'} mã)</div>{canReadSymbols ? <><div className="v num" style={{ fontSize: 16 }}><span className="c-up">▲ {count('up')}</span> · <span className="c-hold">● {count('hold')}</span> · <span className="c-down">▼ {count('down')}</span></div>
+      <div><div className="k">Tỷ lệ nhãn T+5 ({analysed || '—'} mã)</div>{canReadSymbols ? <><div className="v num" style={{ fontSize: 16 }}><span className="c-up">▲ {count('up')}</span> · <span className="c-hold">● {count('hold')}</span> · <span className="c-down">▼ {count('down')}</span></div>
         <div className="breadth"><i className="bg-up" style={{ flex: count('up') }} /><i className="bg-hold" style={{ flex: count('hold') }} /><i className="bg-down" style={{ flex: count('down') }} /></div></> : <div className="small muted">Không áp dụng cho vai trò này</div>}</div>
     </section>
 
     {canReadSymbols ? <section className="card">
       <div className="card-h"><h2>Danh sách mã</h2>
         <div className="actions">
-          <div className="seg">{exchanges.map((value) => <button key={value} type="button" className={exchange === value ? 'on' : ''} onClick={() => setExchange(value)}>{value === 'all' ? 'Tất cả sàn' : value}</button>)}</div>
+          <div className="seg" role="group" aria-label="Nhóm mã">{groups.map(([value, label]) => <button key={value} type="button" className={group === value ? 'on' : ''} onClick={() => setGroup(value)}>{label}</button>)}</div>
           <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Lọc theo ngành" value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="">Mọi ngành</option>{industries.map((item) => <option key={item}>{item}</option>)}</select></div>
           <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Xu hướng T+5" value={trend} onChange={(event) => setTrend(event.target.value)}><option value="">Mọi xu hướng T+5</option>{Object.entries(LABEL_TEXT).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>
           <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Lọc theo thanh khoản" value={minTurnover} onChange={(event) => setMinTurnover(event.target.value)}>{LIQUIDITY_OPTIONS.map(([value, text]) => <option key={text} value={value}>{text}</option>)}</select></div>
@@ -111,20 +112,21 @@ export function OverviewPage() {
           <SortHeader label="GTGD TB20 (tỷ)" sortKey="averageTurnover20d" sort={sort} onSort={sortBy} align="r hide-sm" />
           <th>T+2</th><th>T+5</th><th className="hide-sm">Tin cậy T+5</th>
         </tr></thead>
-        <tbody>{rows.map((item) => <tr key={item.symbol} className="click symbol-row" tabIndex={0} onClick={() => navigate(`/symbols/${item.symbol}`)} onKeyDown={(event) => { if (event.key === 'Enter') navigate(`/symbols/${item.symbol}`); }}>
+        <tbody>{rows.map((item) => <tr key={item.symbol} className="click symbol-row" tabIndex={0} onClick={() => openSymbol(item.symbol, item.analysisEnabled)} onKeyDown={(event) => { if (event.key === 'Enter') openSymbol(item.symbol, item.analysisEnabled); }}>
           {canWatch && <td><button type="button" className={`watch-star ${watchlist.has(item.symbol) ? 'on' : ''}`} onClick={(event) => toggleWatch(event, item.symbol)} aria-pressed={watchlist.has(item.symbol)} aria-label={watchlist.has(item.symbol) ? `Bỏ ${item.symbol} khỏi watchlist` : `Thêm ${item.symbol} vào watchlist`}>{watchlist.has(item.symbol) ? '★' : '☆'}</button></td>}
           <td><span className="sym">{item.symbol}<small className="hide-sm">{item.name}</small></span></td>
           <td className="hide-sm muted">{item.exchange}{item.industry ? ` · ${item.industry}` : ''}</td>
           <td className="r num">{money.format(item.closePrice)}</td>
           <td className={`r num ${changeClass(item.changePercent)}`}>{formatChange(item.changePercent)}</td>
           <td className="r num hide-sm">{item.averageTurnover20d ? number.format(item.averageTurnover20d / 1e9) : '—'}</td>
-          <td><MiniLab forecast={item.forecasts?.t2} /></td>
-          <td><MiniLab forecast={item.forecasts?.t5} />{conflict(item) && <> <span className="chip hold" title="T+2 và T+5 ngược chiều">Mâu thuẫn</span></>}</td>
-          <td className="hide-sm"><Confidence level={item.forecasts?.t5?.confidence} /></td>
+          {item.analysisEnabled === false ? <td colSpan={3} className="small muted" title={NOT_ANALYSED}><span className="chip no-analysis">Chỉ giá</span> Chưa phân tích</td> : <>
+            <td><MiniLab forecast={item.forecasts?.t2} /></td>
+            <td><MiniLab forecast={item.forecasts?.t5} />{conflict(item) && <> <span className="chip hold" title="T+2 và T+5 ngược chiều">Mâu thuẫn</span></>}</td>
+            <td className="hide-sm"><Confidence level={item.forecasts?.t5?.confidence} /></td></>}
         </tr>)}
         {!rows.length && <tr><td colSpan={canWatch ? 9 : 8} className="muted">Không có mã khớp bộ lọc.</td></tr>}</tbody>
       </table></div>
-      <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap' }} className="small muted"><span>Bấm tiêu đề cột để sắp xếp</span><span>☆ thêm nhanh vào watchlist</span><span>Hiển thị {rows.length}/{items.length} mã</span></div>
+      <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap' }} className="small muted"><span>Bấm tiêu đề cột để sắp xếp</span><span>☆ thêm nhanh vào watchlist</span><span>“Chỉ giá”: mã chưa có phân tích sâu</span><span>Hiển thị {rows.length}/{items.length} mã</span></div>
     </section> : <div className="note info">Vai trò quản trị xem trạng thái thị trường và mô hình; danh sách mã và dự báo dành cho người dùng cuối.</div>}
     <Disclaimer />
   </main>;

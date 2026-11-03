@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api/index.js';
 import { ROLE_LABELS, hasCapability } from '@stocksense/core/access';
 import { navigate } from './navigation.js';
+import { openSymbol, rememberSymbols } from './symbolAccess.js';
 import { Icon } from './icons.jsx';
 
 const ADMIN_CAPABILITIES = ['admin.users.manage', 'admin.jobs.read', 'admin.notifications.read', 'admin.ops-events.read', 'admin.role-requests.manage', 'admin.chat-log.read.redacted'];
@@ -66,7 +67,8 @@ function AlertBell() {
   async function openAlert(alert) {
     if (!alert.read_at) await api.alerts.markRead(alert.id).catch(() => {});
     changed(); setOpen(false);
-    navigate(alert.plan_id ? '/plans' : alert.alert_type === 'job_failed' ? '/admin/ops-events' : alert.symbol ? `/symbols/${alert.symbol}` : '/alerts');
+    if (!alert.plan_id && alert.alert_type !== 'job_failed' && alert.symbol) openSymbol(alert.symbol);
+    else navigate(alert.plan_id ? '/plans' : alert.alert_type === 'job_failed' ? '/admin/ops-events' : '/alerts');
   }
   return <div style={{ position: 'relative' }} ref={ref}>
     <button className="iconbtn" type="button" onClick={() => setOpen(!open)} aria-label={`Thông báo, ${unread} chưa đọc`} aria-expanded={open}><Icon name="bell" />{unread > 0 && <span className="badge">{unread > 99 ? '99+' : unread}</span>}</button>
@@ -87,14 +89,28 @@ function SymbolSearch() {
   function submit(event) {
     if (event.key !== 'Enter') return;
     const symbol = value.trim().toUpperCase();
-    if (/^[A-Z0-9.-]{1,12}$/.test(symbol)) { navigate(`/symbols/${symbol}`); setValue(''); }
+    if (/^[A-Z0-9.-]{1,12}$/.test(symbol)) { openSymbol(symbol); setValue(''); }
   }
   return <label className="search"><Icon name="search" /><input id="q" value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={submit} placeholder="Tìm mã, ví dụ FPT" autoComplete="off" aria-label="Tìm mã cổ phiếu" /></label>;
+}
+
+// Short notice raised by openSymbol for display-only symbols.
+function NoticeToast() {
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    let timer;
+    const show = (event) => { setMessage(event.detail.message); window.clearTimeout(timer); timer = window.setTimeout(() => setMessage(''), 4000); };
+    window.addEventListener('stocksense:notice', show);
+    return () => { window.clearTimeout(timer); window.removeEventListener('stocksense:notice', show); };
+  }, []);
+  if (!message) return null;
+  return <div className="toast" role="status" aria-live="polite"><span>{message}</span><button type="button" className="btn sm" onClick={() => setMessage('')} aria-label="Đóng thông báo">✕</button></div>;
 }
 
 export function AppShell({ children }) {
   const { user, logout } = useAuth();
   const [more, setMore] = useState(false);
+  useEffect(() => { if (hasCapability(user.role, 'symbols.read')) api.market.symbols().then((result) => rememberSymbols(result.items)).catch(() => {}); }, [user.role]);
   const pathname = window.location.pathname;
   const items = NAV.filter((item) => item.allow(user.role));
   const groups = [...new Set(items.map((item) => item.group))];
@@ -135,6 +151,7 @@ export function AppShell({ children }) {
       {items.filter((item) => item.path && !['/overview', '/watchlist', '/portfolio', '/plans'].includes(item.path)).map((item) => <button key={item.label} className="nav" type="button" onClick={() => go(item.path)}><Icon name={item.icon} /><span>{item.label}</span></button>)}
       <button className="nav" type="button" onClick={logout}>Đăng xuất</button>
     </div>
+    <NoticeToast />
     <nav className="bottombar" style={admin ? { gridTemplateColumns: '1fr 1fr' } : undefined} aria-label="Điều hướng nhanh">
       {tabs.map(([path, label, icon]) => <button key={label} type="button" className={path && (pathname === path || pathname.startsWith(`${path}/`)) ? 'on' : ''} onClick={() => (path ? go(path) : setMore(!more))}><Icon name={icon} /><span>{label}</span></button>)}
     </nav>

@@ -18,12 +18,41 @@ const rows = [
   ['VRE', 'CTCP Vincom Retail', 'HOSE', 24050, 0.33, 'down', [0.21, 0.31, 0.48], 'hold', [0.27, 0.47, 0.26]],
   ['TCB', 'Ngân hàng TMCP Kỹ thương Việt Nam (Techcombank)', 'HOSE', 21600, -0.31, 'up', [0.55, 0.29, 0.16], 'up', [0.57, 0.27, 0.16]],
 ];
-export const TRACKED_SYMBOLS = rows.map(([symbol]) => symbol);
+// 15 display-only symbols (price board, overview, screener, search); no forecasts or deep analysis yet.
+const displayRows = [
+  ['BID', 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam (BIDV)', 'HOSE', 32000, 0.31],
+  ['CTG', 'Ngân hàng TMCP Công Thương Việt Nam (VietinBank)', 'HOSE', 29750, -0.50],
+  ['HDB', 'Ngân hàng TMCP Phát triển TP. Hồ Chí Minh (HDBank)', 'HOSE', 21900, 0.46],
+  ['VHM', 'CTCP Vinhomes', 'HOSE', 62000, 1.31],
+  ['KDH', 'CTCP Đầu tư và Kinh doanh Nhà Khang Điền', 'HOSE', 13300, -0.75],
+  ['PLX', 'Tập đoàn Xăng dầu Việt Nam (Petrolimex)', 'HOSE', 33000, 0.00],
+  ['SAB', 'Tổng CTCP Bia – Rượu – Nước giải khát Sài Gòn (Sabeco)', 'HOSE', 41700, -0.24],
+  ['VJC', 'CTCP Hàng không VietJet', 'HOSE', 132300, 0.92],
+  ['GVR', 'Tập đoàn Công nghiệp Cao su Việt Nam', 'HOSE', 29100, -1.02],
+  ['DGC', 'CTCP Tập đoàn Hóa chất Đức Giang', 'HOSE', 32700, 0.62],
+  ['PNJ', 'CTCP Vàng bạc Đá quý Phú Nhuận', 'HOSE', 15600, -0.64],
+  ['REE', 'CTCP Cơ Điện Lạnh (REE)', 'HOSE', 44950, 0.22],
+  ['SHS', 'CTCP Chứng khoán Sài Gòn - Hà Nội', 'HNX', 12200, 1.67],
+  ['PVS', 'Tổng CTCP Dịch vụ Kỹ thuật Dầu khí Việt Nam (PTSC)', 'HNX', 29800, -0.67],
+  ['IDC', 'Tổng Công ty IDICO - CTCP', 'HNX', 32600, 0.31],
+];
+export const ANALYSIS_SYMBOLS = rows.map(([symbol]) => symbol);
+export const TRACKED_SYMBOLS = [...ANALYSIS_SYMBOLS, ...displayRows.map(([symbol]) => symbol)];
+
+// Fixed index baskets (same lists as migration 023).
+const VN30 = [...ANALYSIS_SYMBOLS, 'BID', 'CTG', 'HDB', 'VHM', 'PLX', 'SAB', 'VJC', 'GVR'];
+const VN100 = [...VN30, 'DGC', 'PNJ', 'REE', 'KDH'];
+const HNX30 = ['SHS', 'PVS', 'IDC'];
+export const indicesOf = (symbol) => [['VN30', VN30], ['VN100', VN100], ['HNX30', HNX30]]
+  .filter(([, members]) => members.includes(symbol)).map(([code]) => code);
 
 const industries = {
   FPT: 'Công nghệ', VNM: 'Thực phẩm & đồ uống', MSN: 'Thực phẩm & đồ uống', SSI: 'Chứng khoán', VIC: 'Bất động sản', VRE: 'Bất động sản',
   HPG: 'Thép', GAS: 'Dầu khí', MWG: 'Bán lẻ',
   STB: 'Ngân hàng', ACB: 'Ngân hàng', VCB: 'Ngân hàng', MBB: 'Ngân hàng', VPB: 'Ngân hàng', TCB: 'Ngân hàng',
+  BID: 'Ngân hàng', CTG: 'Ngân hàng', HDB: 'Ngân hàng', VHM: 'Bất động sản', KDH: 'Bất động sản', PLX: 'Dầu khí',
+  SAB: 'Thực phẩm & đồ uống', VJC: 'Hàng không', GVR: 'Cao su', DGC: 'Hóa chất', PNJ: 'Bán lẻ', REE: 'Điện & hạ tầng',
+  SHS: 'Chứng khoán', PVS: 'Dầu khí', IDC: 'Bất động sản KCN',
 };
 
 const forecastFrom = (label, values) => {
@@ -55,20 +84,22 @@ export const marketMock = {
     },
   },
   symbols: {
-    items: rows.map(([symbol, name, exchange, closePrice, changePercent, t2Label, t2Values, t5Label, t5Values]) => ({
+    items: [...rows, ...displayRows].map(([symbol, name, exchange, closePrice, changePercent, t2Label, t2Values, t5Label, t5Values]) => ({
       symbol,
       name,
       exchange,
       industry: industries[symbol] ?? null,
+      indices: indicesOf(symbol),
+      analysisEnabled: Boolean(t2Label),
       closePrice,
       changePercent,
-      averageTurnover20d: 125000000000,
+      averageTurnover20d: t2Label ? 125000000000 : 60000000000,
       dataStatus: 'complete',
-      forecasts: {
+      forecasts: t2Label ? {
         t2: forecastFrom(t2Label, t2Values),
         t5: forecastFrom(t5Label, t5Values),
-      },
+      } : null,
     })),
-    total: rows.length,
+    total: rows.length + displayRows.length,
   },
 };

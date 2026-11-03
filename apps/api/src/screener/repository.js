@@ -42,12 +42,16 @@ export function validateScreenerFilters(filters) {
   if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
     throw new ApiError(422, 'VALIDATION_ERROR', 'Filters must be an object.');
   }
-  const allowed = new Set(['exchange', 'industry', 'minPrice', 'maxPrice', 'minChange', 'maxChange', 'minTurnover', 'sort', 'direction']);
+  const allowed = new Set(['exchange', 'index', 'industry', 'minPrice', 'maxPrice', 'minChange', 'maxChange', 'minTurnover', 'sort', 'direction']);
   if (Object.keys(filters).some((key) => !allowed.has(key))) throw new ApiError(422, 'VALIDATION_ERROR', 'Unknown screener filter.');
   const normalized = {};
   if (filters.exchange !== undefined && filters.exchange !== '') {
     if (!['HOSE', 'HNX', 'UPCOM'].includes(filters.exchange)) throw new ApiError(422, 'VALIDATION_ERROR', 'Invalid exchange.');
     normalized.exchange = filters.exchange;
+  }
+  if (filters.index !== undefined && filters.index !== '') {
+    if (!['VN30', 'VN100', 'HNX30'].includes(filters.index)) throw new ApiError(422, 'VALIDATION_ERROR', 'Invalid index group.');
+    normalized.index = filters.index;
   }
   if (filters.industry !== undefined && filters.industry !== '') {
     if (typeof filters.industry !== 'string' || filters.industry.trim().length > 80) throw new ApiError(422, 'VALIDATION_ERROR', 'Invalid industry.');

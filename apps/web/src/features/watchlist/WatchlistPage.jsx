@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.js';
 import { navigate } from '../../app/navigation.js';
+import { openSymbol } from '../../app/symbolAccess.js';
 import { Icon } from '../../app/icons.jsx';
 import { Modal } from '../../app/Modal.jsx';
 import { MiniLab } from '../../components/forecast.jsx';
@@ -72,7 +73,7 @@ export function WatchlistPage() {
       <button className="btn sm" type="button" disabled={busy || watchlist.length >= LIMIT} onClick={() => setAdding({ symbol: availableSymbols[0]?.symbol ?? '', note: '' })}><Icon name="plus" />Thêm mã</button></div>
       <div className="tw"><table><thead><tr><th>Mã</th><th className="r">Giá</th><th className="r">%</th><th>T+2</th><th>T+5</th><th>Ghi chú</th><th /></tr></thead>
         <tbody>{watchlist.map((item) => { const market = bySymbol[item.symbol]; return <tr key={item.symbol}>
-          <td className="sym" style={{ cursor: 'pointer' }} onClick={() => navigate(`/symbols/${item.symbol}`)}>{item.symbol}<small>{item.name}</small></td>
+          <td className="sym" style={{ cursor: 'pointer' }} onClick={() => openSymbol(item.symbol)}>{item.symbol}<small>{item.name}</small></td>
           <td className="r num">{item.close == null ? '—' : money.format(Number(item.close))}</td>
           <td className={`r num ${changeClass(market?.changePercent ?? 0)}`}>{market ? formatChange(market.changePercent) : '—'}</td>
           <td><MiniLab forecast={market?.forecasts?.t2} /></td><td><MiniLab forecast={market?.forecasts?.t5} /></td>

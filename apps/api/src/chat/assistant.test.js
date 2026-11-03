@@ -24,7 +24,9 @@ const NEWS = { FPT: [{ title: 'FPT ký hợp đồng mới', source: 'CafeF', pu
 const market = {
   board: async () => BOARD,
   prices: async (symbol) => (PRICES[symbol] ? { items: PRICES[symbol] } : null),
-  symbol: async (symbol) => (FORECASTS[symbol] ? { symbol, forecasts: FORECASTS[symbol] } : null),
+  // HUT is display-only: prices on the board, no forecasts or deep analysis.
+  symbol: async (symbol) => (symbol === 'HUT' ? { symbol, analysisEnabled: false, forecasts: null }
+    : FORECASTS[symbol] ? { symbol, analysisEnabled: true, forecasts: FORECASTS[symbol] } : null),
   status: async () => ({ state: 'demo', dataDate: '2026-10-07', modelVersion: 'demo-0.0.1' }),
   news: async (symbol) => ({ items: NEWS[symbol] ?? [] }),
   summary: async () => ({
@@ -134,6 +136,12 @@ describe('chat trap questions are refused or answered with NO_DATA', () => {
       expect(reply.content.startsWith(NO_DATA)).toBe(true);
     });
   }
+
+  it('says a display-only symbol has no deep analysis', async () => {
+    const reply = await ask('Dự báo HUT');
+    expect(reply.intent).toBe('forecast');
+    expect(reply.content).toContain('Hệ thống chưa hỗ trợ phân tích sâu mã này');
+  });
 
   it('hides features the role does not have', async () => {
     const admin = await ask('Danh mục của tôi', { id: 'a', role: 'admin' });

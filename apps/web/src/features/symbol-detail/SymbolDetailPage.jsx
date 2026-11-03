@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.js';
 import { navigate } from '../../app/navigation.js';
+import { NOT_ANALYSED } from '../../app/symbolAccess.js';
 import { CandleChart } from './CandleChart.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
@@ -36,17 +37,21 @@ export function SymbolDetailPage({ symbol }) {
   useEffect(() => {
     let active = true;
     setLoading(true); setError(''); setTab('trade');
-    Promise.all([api.symbols.detail(symbol), api.symbols.prices(symbol, 'all'), api.symbols.news(symbol), api.market.status().catch(() => null)])
-      .then(([detail, prices, news, status]) => { if (active) setData({ detail, prices, news, status }); })
+    api.symbols.detail(symbol)
+      .then((detail) => (detail.analysisEnabled === false ? { detail, limited: true }
+        : Promise.all([api.symbols.prices(symbol, 'all'), api.symbols.news(symbol), api.market.status().catch(() => null)])
+          .then(([prices, news, status]) => ({ detail, prices, news, status }))))
+      .then((result) => { if (active) setData(result); })
       .catch((requestError) => { if (active) setError(requestError.message || 'Không tải được dữ liệu mã cổ phiếu.'); })
       .finally(() => { if (active) setLoading(false); });
     if (canWatch) api.watchlist.list().then((result) => { if (active) setWatching(result.items.some((item) => item.symbol === symbol)); }).catch(() => {});
     return () => { active = false; };
   }, [symbol, canWatch]);
 
-  const stats = useMemo(() => (data ? quoteStats(data.detail.exchange, data.prices.items) : null), [data]);
-  const chartBars = useMemo(() => (data ? adjustedBars(data.prices.items) : []), [data]);
-  const newsDays = useMemo(() => (data ? data.news.items.map((item) => newsSession(item.publishedAt)) : []), [data]);
+  const full = data && !data.limited;
+  const stats = useMemo(() => (full ? quoteStats(data.detail.exchange, data.prices.items) : null), [data]);
+  const chartBars = useMemo(() => (full ? adjustedBars(data.prices.items) : []), [data]);
+  const newsDays = useMemo(() => (full ? data.news.items.map((item) => newsSession(item.publishedAt)) : []), [data]);
 
   // FR-M5-01: watchlist toggle from the symbol page.
   async function toggleWatch() {
@@ -62,6 +67,18 @@ export function SymbolDetailPage({ symbol }) {
   if (loading) return <main className="content"><div className="card muted">Đang tải dữ liệu {symbol}…</div></main>;
   if (error) return <main className="content"><div><button className="btn sm" type="button" onClick={goBack}>← Quay lại</button></div><div className="note bad" role="alert">{error}</div></main>;
   if (!data) return null;
+  if (data.limited) {
+    const { detail } = data;
+    return <main className="content">
+      <div><button className="btn sm" type="button" onClick={goBack}>← Quay lại</button></div>
+      <section className="card">
+        <h1 style={{ margin: 0 }}>{detail.symbol} <small className="muted" style={{ fontSize: 14, fontWeight: 400 }}>{detail.name}</small></h1>
+        <p className="muted small">{detail.exchange}{detail.industry ? ` · ${detail.industry}` : ''}{detail.indices?.length ? ` · ${detail.indices.join(', ')}` : ''}</p>
+        <div className="note warn" role="status"><b>{NOT_ANALYSED}.</b> Mã này chỉ có giá cuối ngày; dự báo, giải thích và biểu đồ phân tích dành cho các mã mô hình đang hỗ trợ.</div>
+        <div className="actions" style={{ marginTop: 12 }}><button className="btn" type="button" onClick={() => navigate('/board')}>Xem trên Bảng giá</button></div>
+      </section>
+    </main>;
+  }
 
   const { detail, prices, news, status } = data;
   const quote = stats.quote;

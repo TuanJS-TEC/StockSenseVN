@@ -28,14 +28,16 @@ export async function syncNews({ pool, provider, startDate, endDate, logger = co
     await client.query(`UPDATE data_ingestion_runs SET status='failed', completed_at=now(),
       error_message=coalesce(error_message, 'Lần chạy bị ngắt giữa chừng trước khi hoàn tất.')
       WHERE dataset=$1 AND status='running'`, ['news']);
-    const symbolsResult = await client.query('SELECT symbol FROM symbols WHERE is_enabled = true ORDER BY symbol');
+    const symbolsResult = await client.query('SELECT symbol, analysis_enabled FROM symbols WHERE is_enabled = true ORDER BY symbol');
     const symbols = symbolsResult.rows.map(({ symbol }) => symbol);
+    // Per-symbol news pages only for symbols the model analyses; display-only symbols still get tagged from category news.
+    const pagedSymbols = symbolsResult.rows.filter((row) => row.analysis_enabled !== false).map(({ symbol }) => symbol);
     if (!symbols.length) throw new Error('No enabled symbols are configured in the symbols table.');
 
     const runResult = await client.query(`INSERT INTO data_ingestion_runs
       (source, dataset, units_label, status, range_start, range_end, symbols_total)
       VALUES ('CafeF+VnExpress', 'news', 'categories+symbols', 'running', $1, $2, $3) RETURNING id`,
-    [startDate, endDate, provider.categories.length + (provider.fetchSymbolPage ? symbols.length : 0)]);
+    [startDate, endDate, provider.categories.length + (provider.fetchSymbolPage ? pagedSymbols.length : 0)]);
     runId = runResult.rows[0].id;
 
     for (let offset = 0; offset < provider.categories.length; offset += 3) {
@@ -72,7 +74,7 @@ export async function syncNews({ pool, provider, startDate, endDate, logger = co
     // The daily run (7-day window) stops after page 1; a backfill with --from walks years back.
     let symbolsSucceeded = 0;
     if (provider.fetchSymbolPage) {
-      for (const symbol of symbols) {
+      for (const symbol of pagedSymbols) {
         try {
           let stored = 0;
           for (let page = 1; page <= MAX_SYMBOL_PAGES; page += 1) {

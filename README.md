@@ -14,7 +14,7 @@ Hiện trạng: các chức năng không phụ thuộc mô hình AI đã chạy 
 | API | Node.js 22, Fastify 5, pg, pdfkit, nodemailer (`apps/api`) |
 | Worker | Node.js: đồng bộ giá SSI, tin tức, cảnh báo, gửi thông báo, pipeline hằng ngày (`apps/worker`) |
 | Thư viện dùng chung | Vai trò và quyền, chính sách mật khẩu, tính R:R và khối lượng (`packages/core`) |
-| CSDL | PostgreSQL 17 qua Docker Compose; migration ở `db/migrations` (001–020) |
+| CSDL | PostgreSQL 17 qua Docker Compose; migration ở `db/migrations` (001–023) |
 
 ```text
 apps/api        REST API /api/v1
@@ -42,9 +42,9 @@ npm run db:migrate
 npm run db:seed:demo
 ```
 
-`db:seed:demo` nạp 15 mã HOSE do nhóm mô hình chốt (FPT, VNM, STB, ACB, SSI, VIC, HPG, VCB, MSN, MBB, GAS, MWG, VPB, VRE, TCB), dự báo mẫu và 4 tài khoản demo. Chạy lại lệnh này sẽ đặt lại mật khẩu và mở khóa các tài khoản demo; dùng `node --env-file=.env db/seed-demo.js --market-only` để chỉ cập nhật danh sách mã và dữ liệu mẫu mà không đụng tới tài khoản. Lệnh này không ghi đè giá thật từ SSI và tắt các mã không thuộc danh sách.
+`db:seed:demo` nạp 30 mã theo dõi, dự báo mẫu và 4 tài khoản demo. 15 mã HOSE do nhóm mô hình chốt (FPT, VNM, STB, ACB, SSI, VIC, HPG, VCB, MSN, MBB, GAS, MWG, VPB, VRE, TCB) có dự báo và trang chi tiết; 15 mã còn lại (BID, CTG, HDB, VHM, PLX, SAB, VJC, GVR, DGC, PNJ, REE, KDH trên HOSE; SHS, PVS, IDC trên HNX) chỉ hiện giá trên Tổng quan, Bảng giá, Screener và tìm kiếm (`symbols.analysis_enabled = false`); bấm vào sẽ báo "Hệ thống chưa hỗ trợ phân tích sâu mã này". Rổ VN30/VN100/HNX30 dùng cho bộ lọc nhóm là danh sách cố định trong bảng `index_memberships` (migration 023). Chạy lại lệnh này sẽ đặt lại mật khẩu và mở khóa các tài khoản demo; dùng `node --env-file=.env db/seed-demo.js --market-only` để chỉ cập nhật danh sách mã và dữ liệu mẫu mà không đụng tới tài khoản. Lệnh này không ghi đè giá thật từ SSI và tắt các mã không thuộc danh sách.
 
-Sau khi seed, nạp giá thật 5 năm cho 15 mã và chỉ số (nhóm mô hình dùng 5 năm), ví dụ `--from 2021-10-27`: `node --env-file=../../.env src/cli.js --from <ngày bắt đầu>` trong `apps/worker` (truyền `--from` qua `npm run` sẽ bị npm bỏ mất).
+Sau khi seed, nạp giá thật 5 năm cho 30 mã và chỉ số (nhóm mô hình dùng 5 năm), ví dụ `--from 2021-10-27`: `node --env-file=../../.env src/cli.js --from <ngày bắt đầu>` trong `apps/worker` (truyền `--from` qua `npm run` sẽ bị npm bỏ mất).
 
 Trong `.env`, đặt `AUTH_RATE_LIMIT_SECRET` là một chuỗi ngẫu nhiên ít nhất 32 ký tự (bắt buộc cho đăng ký và quên mật khẩu).
 

@@ -399,3 +399,12 @@ a.brand { text-decoration: none; color: inherit; }
   .quote-stats { order: 2; }
   .candle-main { height: 320px; }
 }
+
+/* Display-only symbols (no forecasts yet) and the notice raised when one is opened. */
+.chip.no-analysis { background: var(--surface-2); color: var(--muted); font-weight: 500; }
+.sym .chip.no-analysis { margin-left: 6px; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 12px; max-width: min(92vw, 520px); padding: 10px 12px 10px 16px; border-radius: 8px;
+  background: var(--ink); color: var(--surface); box-shadow: 0 6px 24px rgb(0 0 0 / 0.22); font-size: 13px; }
+.toast .btn { background: transparent; color: inherit; border-color: transparent; }
+@media (max-width: 760px) { .toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }

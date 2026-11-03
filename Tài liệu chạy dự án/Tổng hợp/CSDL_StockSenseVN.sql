@@ -1,9 +1,9 @@
 -- ====================================================================================================
 -- CSDL STOCKSENSE VN (IDSS) – TOÀN BỘ BẢNG VÀ QUAN HỆ
--- Cập nhật: 31/10/2026 · PostgreSQL 17
+-- Cập nhật: 03/11/2026 · PostgreSQL 17
 --
--- PHẦN A (mục 1–12): 36 bảng đang chạy, sinh tự động từ CSDL thật (khớp migration 001–022),
---   gồm cột, khóa chính, khóa duy nhất, ràng buộc CHECK, 43 khóa ngoại, chỉ mục, hàm và trigger.
+-- PHẦN A (mục 1–12): 37 bảng đang chạy, sinh tự động từ CSDL thật (khớp migration 001–023),
+--   gồm cột, khóa chính, khóa duy nhất, ràng buộc CHECK, 44 khóa ngoại, chỉ mục, hàm và trigger.
 --   Không gồm bảng kỹ thuật schema_migrations (lưu lịch sử chạy migration).
 -- PHẦN B: 7 bảng và các cột bổ sung cho mô hình AI (đề xuất theo SDD §6.2, CHƯA tạo trong CSDL).
 --
@@ -14,7 +14,8 @@
 -- Nhóm bảng:
 --   1. Người dùng, xác thực, đăng ký: users, auth_sessions, password_reset_tokens, password_reset_requests,
 --      email_verification_tokens, registration_requests, user_consent, role_requests
---   2. Thị trường: symbols, daily_prices (giá khớp + giá điều chỉnh), market_index_daily, market_holidays
+--   2. Thị trường: symbols (analysis_enabled: mã có phân tích mô hình), index_memberships (rổ VN30/VN100/HNX30),
+--      daily_prices (giá khớp + giá điều chỉnh), market_index_daily, market_holidays
 --   3. Dự báo: market_batches, forecasts, market_indices, market_summary
 --   4. Tin tức: news_items, news_item_symbols
 --   5. Watchlist, cảnh báo: watchlist_items, alert_rules, user_alerts
@@ -160,10 +161,21 @@ CREATE TABLE symbols (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   industry text,
+  analysis_enabled boolean DEFAULT false NOT NULL,
   CONSTRAINT symbols_pkey PRIMARY KEY (symbol),
   CONSTRAINT symbols_exchange_check CHECK ((exchange = ANY (ARRAY['HOSE'::text, 'HNX'::text, 'UPCOM'::text]))),
   CONSTRAINT symbols_symbol_check CHECK (((symbol)::text = upper((symbol)::text)))
 );
+
+CREATE TABLE index_memberships (
+  index_code text NOT NULL,
+  symbol character varying(12) NOT NULL,
+  added_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT index_memberships_pkey PRIMARY KEY (index_code, symbol),
+  CONSTRAINT index_memberships_index_code_check CHECK ((index_code = ANY (ARRAY['VN30'::text, 'VN100'::text, 'HNX30'::text])))
+);
+-- Liên kết: symbol → symbols(symbol) [xóa theo]
+CREATE INDEX index_memberships_symbol_idx ON index_memberships USING btree (symbol);
 
 CREATE TABLE daily_prices (
   symbol character varying(12) NOT NULL,
@@ -674,6 +686,7 @@ ALTER TABLE email_verification_tokens ADD CONSTRAINT email_verification_tokens_u
 ALTER TABLE user_consent ADD CONSTRAINT user_consent_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE role_requests ADD CONSTRAINT role_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE role_requests ADD CONSTRAINT role_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE index_memberships ADD CONSTRAINT index_memberships_symbol_fkey FOREIGN KEY (symbol) REFERENCES symbols(symbol) ON DELETE CASCADE;
 ALTER TABLE daily_prices ADD CONSTRAINT daily_prices_symbol_fkey FOREIGN KEY (symbol) REFERENCES symbols(symbol) ON DELETE CASCADE;
 ALTER TABLE forecasts ADD CONSTRAINT forecasts_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES market_batches(id) ON DELETE CASCADE;
 ALTER TABLE forecasts ADD CONSTRAINT forecasts_symbol_fkey FOREIGN KEY (symbol) REFERENCES symbols(symbol) ON DELETE CASCADE;

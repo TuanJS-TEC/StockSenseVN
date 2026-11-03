@@ -646,7 +646,7 @@ app.get('/api/v1/symbols', { preHandler: requireCapability('symbols.read') }, as
 app.get('/api/v1/industries', { preHandler: requireCapability('symbols.read') }, async () => envelope(await market.industries()));
 
 app.get('/api/v1/screener', { preHandler: requireCapability('screener.read') }, async (request, reply) => {
-  const raw = Object.fromEntries(['exchange', 'industry', 'minPrice', 'maxPrice', 'minChange', 'maxChange', 'minTurnover', 'sort', 'direction']
+  const raw = Object.fromEntries(['exchange', 'index', 'industry', 'minPrice', 'maxPrice', 'minChange', 'maxChange', 'minTurnover', 'sort', 'direction']
     .filter((key) => request.query[key] !== undefined).map((key) => [key, request.query[key]]));
   let filters;
   try { filters = validateScreenerFilters(raw); }
