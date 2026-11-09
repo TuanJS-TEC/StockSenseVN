@@ -1,14 +1,8 @@
+import { NOT_ANALYSED } from '@stocksense/core/symbol-groups';
 import { navigate } from './navigation.js';
 
-export const NOT_ANALYSED = 'Hệ thống chưa hỗ trợ phân tích sâu mã này';
-// Group tabs of the overview and price board: index baskets (index_memberships) and exchanges.
-export const SYMBOL_GROUPS = [['all', 'Tất cả'], ['VN30', 'VN30'], ['VN100', 'VN100'], ['HOSE', 'HOSE'], ['HNX30', 'HNX30'], ['HNX', 'HNX']];
-const EXCHANGES = ['HOSE', 'HNX', 'UPCOM'];
-
-export function inGroup(item, group) {
-  if (group === 'all') return true;
-  return EXCHANGES.includes(group) ? item.exchange === group : (item.indices ?? []).includes(group);
-}
+// Group logic and the notice text live in packages/core so the mobile app uses the same rules and wording.
+export { NOT_ANALYSED, SYMBOL_GROUPS, inGroup } from '@stocksense/core/symbol-groups';
 
 // symbol -> analysisEnabled, filled by the app shell so pages without that flag (watchlist, search) can check it.
 let analysis = new Map();

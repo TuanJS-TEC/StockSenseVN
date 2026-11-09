@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
@@ -70,6 +71,9 @@ const demoPasswords = new Map([...demoAccounts.entries()].map(([email, role]) =>
 const demoMustChangePassword = new Map();
 
 await app.register(cookie);
+// gzip/brotli for JSON over mobile networks (5 years of daily bars: about 250 KB raw, about 50 KB compressed).
+// Small bodies are sent as-is; PDFs and other binary types are skipped by their MIME type.
+await app.register(compress, { global: true, threshold: 1024, encodings: ['br', 'gzip', 'deflate'] });
 await app.register(helmet, { global: true });
 await app.register(cors, {
   origin: process.env.PUBLIC_APP_URL || 'http://localhost:5173',
@@ -93,10 +97,21 @@ await app.register(rateLimit, {
 });
 app.decorateRequest('user', null);
 app.decorateRequest('sessionToken', null);
+app.decorateRequest('authMethod', null);
+// Mobile (SDD §8.3) sends the same session token as "Authorization: Bearer <token>".
+function bearerToken(request) {
+  const header = request.headers.authorization;
+  if (typeof header !== 'string') return null;
+  const match = /^Bearer\s+([A-Za-z0-9._~+/=-]{1,128})$/i.exec(header.trim());
+  return match ? match[1] : null;
+}
 const mustChangeAllowedRoutes = new Set(['/api/v1/auth/login', '/api/v1/auth/logout', '/api/v1/auth/change-password', '/api/v1/me']);
 app.addHook('onRequest', async (request) => {
-  const sessionId = request.cookies[sessionCookie];
+  // The cookie wins when both are present; Bearer is only read when there is no cookie.
+  const cookieToken = request.cookies[sessionCookie];
+  const sessionId = cookieToken || bearerToken(request);
   request.sessionToken = sessionId ?? null;
+  request.authMethod = cookieToken ? 'cookie' : sessionId ? 'bearer' : null;
   if (postgresAuth) {
     request.user = await postgresAuth.findUserByToken(sessionId);
     return;
@@ -123,6 +138,7 @@ function fail(reply, request, status, code, message) {
 }
 
 function clearSessionCookie(reply) {
+  if (reply.request.authMethod === 'bearer') return;
   reply.clearCookie(sessionCookie, { path: '/api/v1', httpOnly: true, sameSite: 'lax', secure: process.env.COOKIE_SECURE === 'true' });
 }
 
@@ -355,7 +371,10 @@ app.post('/api/v1/auth/resend-verification', {
 app.post('/api/v1/auth/login', {
   config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
 }, async (request, reply) => {
-  const { email, password } = request.body ?? {};
+  const { email, password, client = 'web' } = request.body ?? {};
+  if (client !== 'web' && client !== 'mobile') {
+    return fail(reply, request, 422, 'VALIDATION_ERROR', 'client phải là web hoặc mobile.');
+  }
   if (typeof email !== 'string' || email.length > 254 || !/^\S+@\S+\.\S+$/.test(email) ||
       typeof password !== 'string' || !password || password.length > 256) {
     return fail(reply, request, 422, 'VALIDATION_ERROR', 'Email và mật khẩu là bắt buộc.');
@@ -379,6 +398,10 @@ app.post('/api/v1/auth/login', {
   if (!login) return fail(reply, request, 401, 'INVALID_CREDENTIALS', 'Email hoặc mật khẩu không đúng.');
 
   reply.header('Cache-Control', 'no-store');
+  if (client === 'mobile') {
+    // Mobile keeps the token in Keychain/Keystore and sends it as Bearer; no cookie is set.
+    return envelope({ user: login.user, token: login.token, token_type: 'Bearer', expires_in: login.maxAgeSeconds });
+  }
   reply.setCookie(sessionCookie, login.token, {
     path: '/api/v1', httpOnly: true, sameSite: 'lax', secure: process.env.COOKIE_SECURE === 'true',
     maxAge: login.maxAgeSeconds,

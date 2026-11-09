@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/*.log
+**/*.test.js
+.git
+.env
+.env.*
+apps/web/*
+!apps/web/package.json
+docs
+Tài liệu chạy dự án
+openapi.yaml
+README.md
+Dockerfile
+docker-compose.yml
+mobile

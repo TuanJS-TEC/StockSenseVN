@@ -9,7 +9,6 @@ export const PRICE_RANGES = Object.keys(RANGE_MONTHS);
 // Index baskets of a symbol, VN30 first (fixed lists in index_memberships).
 const INDICES_SQL = `ARRAY(SELECT m.index_code FROM index_memberships m WHERE m.symbol = s.symbol
   ORDER BY array_position(ARRAY['VN30','VN100','HNX30'], m.index_code)) AS indices`;
-export const INDEX_GROUPS = ['VN30', 'VN100', 'HNX30'];
 const INDEX_CODES = { VNINDEX: ['VNINDEX', 'VN-Index'], HNXINDEX: ['HNX', 'HNX-Index'], VN30: ['VN30', 'VN30'] };
 
 export function createFixtureMarketRepository() {

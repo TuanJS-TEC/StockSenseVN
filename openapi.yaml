@@ -2,7 +2,11 @@ openapi: 3.1.0
 info:
   title: StockSense VN API
   version: 0.1.0
-  description: Contract for the first web slice. PostgreSQL mode stores demo market content and database sessions; fixture mode uses development-only accounts.
+  description: >-
+    REST contract for the StockSense VN web app and the mobile app. Every authenticated route accepts either the
+    session cookie (web) or an Authorization Bearer token (mobile); both map to the same database session (24 hours),
+    role check and ownership check. Responses use the envelope { data } on success and { error: { code, message,
+    request_id } } on failure. Fixture mode (no DATABASE_URL) uses development-only accounts.
 servers:
   - url: /api/v1
 tags:
@@ -51,14 +55,14 @@ paths:
                 token: { type: string, minLength: 40, maxLength: 64 }
                 new_password: { type: string, minLength: 12, maxLength: 128 }
       responses:
-        '200': { description: Password updated, outstanding tokens consumed, and sessions revoked }
-        '422': { description: Invalid, expired, or already used token; or invalid password }
+        '200': { description: 'Password updated, outstanding tokens consumed, and sessions revoked' }
+        '422': { description: 'Invalid, expired, or already used token; or invalid password' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /admin/jobs:
     get:
       tags: [Admin]
       x-required-capability: admin.jobs.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200':
           description: Allowlisted worker jobs, 50 recent runs, and the 10 most recently seen worker instances with online state
@@ -70,7 +74,7 @@ paths:
     post:
       tags: [Admin]
       x-required-capability: admin.jobs.enqueue
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { name: job, in: path, required: true, schema: { type: string, enum: [market.sync, news.sync, notifications.deliver] } }
       responses:
@@ -84,7 +88,7 @@ paths:
     get:
       tags: [Admin]
       x-required-capability: admin.notifications.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
       responses:
@@ -97,11 +101,11 @@ paths:
     get:
       tags: [Admin]
       x-required-capability: admin.ops-events.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
       responses:
-        '200': { description: Recent failed or partial operational runs, with no raw error messages or user-owned data, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/AdminOpsEventList' } } } } } }
+        '200': { description: 'Recent failed or partial operational runs, with no raw error messages or user-owned data', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/AdminOpsEventList' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/InvalidRequest' }
@@ -110,7 +114,7 @@ paths:
     get:
       tags: [Reports]
       x-required-capability: reports.symbol.export
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { name: symbol, in: path, required: true, schema: { type: string, pattern: '^[A-Z0-9.-]{1,12}$' } }
       responses:
@@ -122,7 +126,7 @@ paths:
       tags: [Reports]
       x-required-capability: reports.portfolio.export.self
       x-owner-scope: session.user_id
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Current user's portfolio PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -133,7 +137,7 @@ paths:
       tags: [Reports]
       x-required-capability: reports.plan.export.self
       x-owner-scope: session.user_id
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -146,7 +150,7 @@ paths:
       tags: [Reports]
       x-required-capability: reports.journal.export.self
       x-owner-scope: session.user_id
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Current user's journal PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -157,7 +161,7 @@ paths:
       tags: [Symbols]
       x-required-capability: history.csv.export
       x-release-flag: HISTORY_CSV_EXPORT_ENABLED
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { name: symbol, in: path, required: true, schema: { type: string, pattern: '^[A-Z0-9.-]{1,12}$' } }
         - { name: range, in: query, schema: { type: string, enum: [1m, 3m, 6m], default: 6m } }
@@ -170,7 +174,7 @@ paths:
     get:
       tags: [Chat]
       x-required-capability: chat.use.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Chat sessions owned by the current user }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -178,7 +182,7 @@ paths:
     post:
       tags: [Chat]
       x-required-capability: chat.use.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -195,7 +199,7 @@ paths:
     get:
       tags: [Chat]
       x-required-capability: chat.use.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
       responses:
@@ -206,14 +210,14 @@ paths:
     post:
       tags: [Chat]
       x-required-capability: chat.use.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/ChatMessageInput' }
       responses:
-        '201': { description: User message and generated answer, once inference and safety are configured }
+        '201': { description: 'User message and generated answer, once inference and safety are configured' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/InvalidRequest' }
@@ -224,7 +228,7 @@ paths:
     delete:
       tags: [Chat]
       x-required-capability: chat.use.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Deleted the current user's session and messages }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -233,22 +237,22 @@ paths:
     get:
       tags: [Journal]
       x-required-capability: journal.read.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: symbol, schema: { type: string, maxLength: 12 } }
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
-        - { in: query, name: from, description: Decision date (manual) or creation date, ICT, schema: { type: string, format: date } }
+        - { in: query, name: from, description: 'Decision date (manual) or creation date, ICT', schema: { type: string, format: date } }
         - { in: query, name: to, schema: { type: string, format: date } }
         - { in: query, name: tag, schema: { type: string, maxLength: 24 } }
         - { in: query, name: result, schema: { type: string, enum: [win, loss, breakeven, none] } }
-        - { in: query, name: q, description: Case-insensitive search in title, note and lesson, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: q, description: 'Case-insensitive search in title, note and lesson', schema: { type: string, maxLength: 100 } }
       responses:
         '200': { description: Journal entries owned by the current user; snapshots and outcomes are read-only }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Journal]
       x-required-capability: journal.manual.create.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -262,17 +266,17 @@ paths:
     get:
       tags: [Journal]
       x-required-capability: journal.stats.read.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: period, schema: { type: string, enum: [week, month, quarter], default: month } }
       responses:
-        '200': { description: Owner-scoped totals plus per-period buckets (closed plans, target/stop hit rate, planned and realized R, P/L) }
+        '200': { description: 'Owner-scoped totals plus per-period buckets (closed plans, target/stop hit rate, planned and realized R, P/L)' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /journal/{id}:
     patch:
       tags: [Journal]
       x-required-capability: journal.update.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -281,35 +285,35 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/JournalUpdate' }
       responses:
-        '200': { description: Updated owner note, tags, or lesson; snapshot and result unchanged }
+        '200': { description: 'Updated owner note, tags, or lesson; snapshot and result unchanged' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/InvalidRequest' }
   /plans/calc:
     post:
       tags: [Plans]
       x-required-capability: plans.calculate.rr
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/PlanCalculationInput' }
       responses:
-        '200': { description: Risk, reward, and R:R; quantity fields are role-gated }
+        '200': { description: 'Risk, reward, and R:R; quantity fields are role-gated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/InvalidRequest' }
   /plans:
     get:
       tags: [Plans]
       x-required-capability: plans.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Trade plans owned by the current user }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Plans]
       x-required-capability: plans.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -323,7 +327,7 @@ paths:
     patch:
       tags: [Plans]
       x-required-capability: plans.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -335,14 +339,14 @@ paths:
                 - { type: object, required: [status], additionalProperties: false, properties: { status: { type: string, enum: [planned, active, cancelled] } } }
                 - $ref: '#/components/schemas/TradePlanUpdate'
       responses:
-        '200': { description: Updated plan (status transition draft→planned→active, or an edit recorded in revisions) }
+        '200': { description: 'Updated plan (status transition draft→planned→active, or an edit recorded in revisions)' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/InvalidRequest' }
   /plans/{id}/close:
     post:
       tags: [Plans]
       x-required-capability: plans.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       requestBody:
@@ -358,15 +362,15 @@ paths:
     get:
       tags: [Portfolio]
       x-required-capability: portfolio.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
-        '200': { description: User-scoped portfolio summary, positions with industry and weight, allocation by symbol/industry, 180-day value history, and ledger }
+        '200': { description: 'User-scoped portfolio summary, positions with industry and weight, allocation by symbol/industry, 180-day value history, and ledger' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
     delete:
       tags: [Portfolio]
       x-required-capability: portfolio.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [confirm], properties: { confirm: { type: string, const: 'XOA TOAN BO' } } } } } }
       responses:
         '200': { description: All portfolio transactions of the current user deleted }
@@ -375,7 +379,7 @@ paths:
     post:
       tags: [Portfolio]
       x-required-capability: portfolio.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -389,7 +393,7 @@ paths:
     post:
       tags: [Portfolio]
       x-required-capability: portfolio.import.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -411,7 +415,7 @@ paths:
     patch:
       tags: [Portfolio]
       x-required-capability: portfolio.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PortfolioTransactionInput' } } } }
@@ -422,7 +426,7 @@ paths:
     delete:
       tags: [Portfolio]
       x-required-capability: portfolio.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -434,7 +438,7 @@ paths:
       tags: [Screener]
       summary: Filter enabled symbols using market prices and turnover
       x-required-capability: screener.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: exchange, schema: { type: string, enum: [HOSE, HNX, UPCOM] } }
         - { in: query, name: minPrice, schema: { type: number, minimum: 0 } }
@@ -442,8 +446,13 @@ paths:
         - { in: query, name: minChange, schema: { type: number } }
         - { in: query, name: maxChange, schema: { type: number } }
         - { in: query, name: minTurnover, schema: { type: number, minimum: 0 } }
+        - { in: query, name: index, schema: { type: string, enum: [VN30, VN100, HNX30] }, description: Fixed index basket from index_memberships }
+        - { in: query, name: industry, schema: { type: string } }
+        - { in: query, name: sort, schema: { type: string, enum: [symbol, price, changePercent, turnover] } }
+        - { in: query, name: direction, schema: { type: string, enum: [asc, desc] } }
       responses:
         '200': { description: Matching symbols and market metrics }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     
@@ -451,7 +460,7 @@ paths:
     get:
       tags: [Screener]
       x-required-capability: screener.saved.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Saved filters owned by the current user }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -459,7 +468,7 @@ paths:
     post:
       tags: [Screener]
       x-required-capability: screener.saved.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -479,7 +488,7 @@ paths:
     delete:
       tags: [Screener]
       x-required-capability: screener.saved.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -490,6 +499,7 @@ paths:
     post:
       tags: [Auth]
       summary: Create a session
+      security: []
       requestBody:
         required: true
         content:
@@ -500,27 +510,34 @@ paths:
               properties:
                 email: { type: string, format: email, maxLength: 254 }
                 password: { type: string, minLength: 1, maxLength: 256, writeOnly: true }
+                client: { type: string, enum: [web, mobile], default: web, description: 'mobile returns the session token in the body instead of setting a cookie' }
       responses:
         '200':
-          description: Authenticated user; session is set in an HttpOnly cookie
+          description: >-
+            Authenticated user. client=web sets the session in an HttpOnly cookie. client=mobile sets no cookie and
+            returns token, token_type and expires_in; the app stores the token in Keychain/Keystore. Cache-Control is no-store.
           headers:
-            Set-Cookie: { schema: { type: string } }
+            Set-Cookie: { description: Only for client=web, schema: { type: string } }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/UserEnvelope' }
+              schema:
+                anyOf:
+                  - { $ref: '#/components/schemas/UserEnvelope' }
+                  - { $ref: '#/components/schemas/MobileLoginEnvelope' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: EMAIL_NOT_VERIFIED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '422': { $ref: '#/components/responses/InvalidRequest' }
   /auth/logout:
     post:
       tags: [Auth]
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
-        '204': { description: Session cleared }
+        '204': { description: 'Session revoked; the web cookie is cleared, the mobile app deletes its stored token' }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /auth/change-password:
     post:
       tags: [Auth]
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -539,24 +556,45 @@ paths:
   /me:
     get:
       tags: [Auth]
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Current user, content: { application/json: { schema: { $ref: '#/components/schemas/UserEnvelope' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Settings]
+      summary: Delete the user's own account
+      x-owner-scope: session.user_id
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Requires the current password. Admin accounts cannot delete themselves. The session ends; the web cookie is cleared and the mobile app deletes its token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, minLength: 1, writeOnly: true }
+      responses:
+        '200': { description: Account deleted, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { deleted: { type: boolean, const: true } } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: ADMIN_SELF_DELETE_BLOCKED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '422': { description: VALIDATION_ERROR or CURRENT_PASSWORD_INVALID, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /me/profile:
     get:
       tags: [Settings]
       x-required-capability: profile.investment.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
-        '200': { description: Personal investment profile, possibly null when not configured, content: { application/json: { schema: { type: object, required: [data], properties: { data: { type: object, required: [profile], properties: { profile: { oneOf: [{ $ref: '#/components/schemas/InvestmentProfile' }, { type: 'null' }] } } } } } } } }
+        '200': { description: 'Personal investment profile, possibly null when not configured', content: { application/json: { schema: { type: object, required: [data], properties: { data: { type: object, required: [profile], properties: { profile: { oneOf: [{ $ref: '#/components/schemas/InvestmentProfile' }, { type: 'null' }] } } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
     put:
       tags: [Settings]
       x-required-capability: profile.investment.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -572,7 +610,7 @@ paths:
     get:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Current user's channel preferences and provider readiness; readiness does not imply delivery }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -580,7 +618,7 @@ paths:
     put:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -595,15 +633,15 @@ paths:
     get:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
-        '200': { description: Owner-scoped channels, verification state, and provider readiness }
+        '200': { description: 'Owner-scoped channels, verification state, and provider readiness' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /notify/email/link:
     post:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Sent a short-lived code to the account email }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -613,7 +651,7 @@ paths:
     post:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -626,7 +664,7 @@ paths:
     post:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Short-lived Telegram bot deep link; user must start the bot in a private chat }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -644,7 +682,7 @@ paths:
     post:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Test message delivered to verified channel }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -657,7 +695,7 @@ paths:
     delete:
       tags: [Settings]
       x-required-capability: notifications.channels.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Unlinked channel and disabled its preference }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -665,7 +703,7 @@ paths:
     get:
       tags: [Admin]
       x-required-capability: admin.users.manage
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: q, schema: { type: string, maxLength: 100 } }
       responses:
@@ -676,7 +714,7 @@ paths:
     post:
       tags: [Admin]
       x-required-capability: admin.users.manage
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -700,7 +738,7 @@ paths:
     patch:
       tags: [Admin]
       x-required-capability: admin.users.manage
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -725,7 +763,7 @@ paths:
     post:
       tags: [Admin]
       x-required-capability: admin.users.manage
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: One-time temporary password; user must change it after login, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/TemporaryPasswordResult' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -738,7 +776,7 @@ paths:
     post:
       tags: [Admin]
       x-required-capability: admin.users.manage
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Active sessions revoked, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { revoked_sessions: { type: integer } } } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -749,7 +787,7 @@ paths:
     get:
       tags: [Admin]
       x-required-capability: admin.audit.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
         - { in: query, name: cursor, schema: { type: string, maxLength: 256 } }
@@ -759,7 +797,7 @@ paths:
         - { in: query, name: actor, description: Substring of the actor email, schema: { type: string, maxLength: 254 } }
         - { in: query, name: target, description: Substring of the target account email, schema: { type: string, maxLength: 254 } }
       responses:
-        '200': { description: Cursor-paginated audit events filtered by type, ICT date range, actor and target, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/AdminAuditList' } } } } } }
+        '200': { description: 'Cursor-paginated audit events filtered by type, ICT date range, actor and target', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/AdminAuditList' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/InvalidRequest' }
@@ -767,7 +805,7 @@ paths:
     get:
       tags: [Admin]
       x-required-capability: admin.jobs.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
       responses:
@@ -779,7 +817,7 @@ paths:
     get:
       tags: [Personal]
       x-required-capability: watchlist.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Current user's watchlist, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Watchlist' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -790,7 +828,7 @@ paths:
     put:
       tags: [Personal]
       x-required-capability: watchlist.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody: { required: false, content: { application/json: { schema: { type: object, properties: { note: { type: string, maxLength: 500 } } } } } }
       responses:
         '200': { description: Added or updated own watchlist item }
@@ -799,7 +837,7 @@ paths:
     patch:
       tags: [Personal]
       x-required-capability: watchlist.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [note], properties: { note: { type: string, maxLength: 500 } } } } } }
       responses:
         '200': { description: Own watchlist note updated }
@@ -807,7 +845,7 @@ paths:
     delete:
       tags: [Personal]
       x-required-capability: watchlist.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Own watchlist item removed }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -815,13 +853,13 @@ paths:
     get:
       tags: [Personal]
       x-required-capability: alerts.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Current user's price alert rules, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/AlertRuleList' } } } } } }
     post:
       tags: [Personal]
       x-required-capability: alerts.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [symbol, condition, target_price], properties: { symbol: { type: string }, condition: { type: string, enum: [price_above, price_below] }, target_price: { type: number, exclusiveMinimum: 0 } } } } } }
       responses:
         '201': { description: Alert rule created }
@@ -832,7 +870,7 @@ paths:
     patch:
       tags: [Personal]
       x-required-capability: alerts.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { is_active: { type: boolean }, target_price: { type: number, exclusiveMinimum: 0 } } } } } }
       responses:
         '200': { description: Alert rule updated }
@@ -840,7 +878,7 @@ paths:
     delete:
       tags: [Personal]
       x-required-capability: alerts.manage.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Own alert rule deleted }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -848,7 +886,7 @@ paths:
     get:
       tags: [Personal]
       x-required-capability: alerts.inbox.read.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
       responses:
@@ -859,7 +897,7 @@ paths:
     patch:
       tags: [Personal]
       x-required-capability: alerts.inbox.read.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [read], properties: { read: { type: boolean, const: true } } } } } }
       responses:
         '200': { description: Alert marked read }
@@ -868,28 +906,28 @@ paths:
     get:
       tags: [Personal]
       x-required-capability: alerts.inbox.read.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Number of unread alerts in the 90-day inbox, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { unread: { type: integer } } } } } } } }
   /alerts/read-all:
     post:
       tags: [Personal]
       x-required-capability: alerts.inbox.read.self
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: All unread alerts marked read }
   /industries:
     get:
       tags: [Market]
       x-required-capability: symbols.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Distinct industries of enabled symbols, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { items: { type: array, items: { type: string } } } } } } } } }
   /market/status:
     get:
       tags: [Market]
       x-required-capability: market.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Data/model freshness, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/MarketStatus' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -898,7 +936,7 @@ paths:
     get:
       tags: [Market]
       x-required-capability: market.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Market index and breadth summary, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/MarketSummary' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -907,12 +945,12 @@ paths:
     get:
       tags: [Symbols]
       x-required-capability: symbols.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
         - { in: query, name: exchange, schema: { type: string, enum: [HOSE, HNX, UPCOM] } }
         - { in: query, name: q, schema: { type: string, maxLength: 50 } }
       responses:
-        '200': { description: Forecast-enabled symbols, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/SymbolList' } } } } } }
+        '200': { description: 'Tracked symbols (30). analysisEnabled=false marks display-only symbols: prices only, forecasts null', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/SymbolList' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /symbols/{symbol}:
@@ -921,7 +959,7 @@ paths:
     get:
       tags: [Symbols]
       x-required-capability: symbols.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Symbol and latest forecast, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Symbol' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -933,11 +971,11 @@ paths:
     get:
       tags: [Symbols]
       x-required-capability: history.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       parameters:
-        - { in: query, name: range, schema: { type: string, enum: [1m, 3m, 6m], default: 3m } }
+        - { in: query, name: range, schema: { type: string, enum: [1m, 3m, 6m, 1y, all], default: 3m } }
       responses:
-        '200': { description: Daily closing prices, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/PriceSeries' } } } } } }
+        '200': { description: 'Daily OHLC bars, raw and adjusted for corporate actions (all = about 5 years)', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/PriceSeries' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -947,15 +985,319 @@ paths:
     get:
       tags: [Symbols]
       x-required-capability: news.read
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
       responses:
         '200': { description: Related news, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/NewsList' } } } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Self-register a retail account (FR-M0-08)
+      security: []
+      description: Always answers 202 with the same message whether or not the email exists. A verification email with a one-time 24-hour link is sent to new accounts. Any role field is ignored. Rate limit 5 per minute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, age_confirmed, terms_accepted, privacy_accepted]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+                full_name: { type: [string, 'null'], maxLength: 100 }
+                age_confirmed: { type: boolean, const: true }
+                terms_accepted: { type: boolean, const: true }
+                privacy_accepted: { type: boolean, const: true }
+      responses:
+        '202': { description: Generic message, content: { application/json: { schema: { $ref: '#/components/schemas/MessageEnvelope' } } } }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Consume an email verification token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, pattern: '^[A-Za-z0-9_-]{40,64}$' }
+      responses:
+        '200': { description: Email verified; the user can now log in, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { verified: { type: boolean, const: true } } } } } } } }
+        '422': { description: 'VALIDATION_ERROR, or EMAIL_VERIFICATION_TOKEN_INVALID when the token is unknown, used or expired', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Resend the verification email (FR-M0-09)
+      security: []
+      description: Always answers 202 with the same message. At most 5 per day and 60 seconds apart per account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+      responses:
+        '202': { description: Generic message, content: { application/json: { schema: { $ref: '#/components/schemas/MessageEnvelope' } } } }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /me/upgrade/trader:
+    post:
+      tags: [Settings]
+      summary: Self-upgrade retail to trader
+      x-required-capability: profile.role.manage.self
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Only a retail account can upgrade. All sessions of the user are revoked, so the client must log in again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [experience, purpose, acknowledged]
+              properties:
+                experience: { type: string, enum: [under_1y, 1_3y, over_3y] }
+                purpose: { type: string, enum: [personal, brokerage, portfolio_management] }
+                acknowledged: { type: boolean, const: true }
+      responses:
+        '200': { description: Role changed, content: { application/json: { schema: { $ref: '#/components/schemas/RoleChangeResult' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: UPGRADE_NOT_ALLOWED (account is not retail), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /me/downgrade/retail:
+    post:
+      tags: [Settings]
+      summary: Self-downgrade trader to retail
+      x-required-capability: profile.role.manage.self
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Only a trader account can downgrade. All sessions of the user are revoked.
+      responses:
+        '200': { description: Role changed, content: { application/json: { schema: { $ref: '#/components/schemas/RoleChangeResult' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: DOWNGRADE_NOT_ALLOWED (account is not trader), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /me/role-requests:
+    get:
+      tags: [Settings]
+      summary: The user's own analyst role requests (latest 20)
+      x-required-capability: profile.role.manage.self
+      x-owner-scope: session.user_id
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      responses:
+        '200': { description: Own requests, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/RoleRequest' } } } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Settings]
+      summary: Request the analyst role; an admin reviews it
+      x-required-capability: profile.role.manage.self
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Retail or trader only. One pending request at a time; after a rejection the user waits 7 days. Rate limit 5 per minute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organization, position, work_email, purpose]
+              properties:
+                organization: { type: string, minLength: 1, maxLength: 200 }
+                position: { type: string, minLength: 1, maxLength: 200 }
+                work_email: { type: string, format: email, maxLength: 254 }
+                purpose: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '201': { description: Request created, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { request: { $ref: '#/components/schemas/RoleRequest' } } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: 'ROLE_REQUEST_NOT_ALLOWED, ROLE_REQUEST_PENDING or ROLE_REQUEST_COOLDOWN', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /me/consents:
+    get:
+      tags: [Settings]
+      summary: Terms and privacy consents the user accepted
+      x-owner-scope: session.user_id
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      responses:
+        '200':
+          description: Consent records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          required: [doc_type, version, channel, accepted_at]
+                          properties:
+                            doc_type: { type: string }
+                            version: { type: string }
+                            channel: { type: string }
+                            accepted_at: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/chat-log:
+    get:
+      tags: [Admin]
+      summary: Redacted Chat log for moderation
+      x-required-capability: admin.chat-log.read.redacted
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: User emails are masked and messages that touch personal data are replaced with a placeholder.
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+        - { in: query, name: status, schema: { type: string, enum: [complete, blocked] } }
+      responses:
+        '200':
+          description: Latest messages first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            created_at: { type: string, format: date-time }
+                            role: { type: string, enum: [user, assistant] }
+                            status: { type: string }
+                            intent: { type: [string, 'null'] }
+                            engine: { type: [string, 'null'] }
+                            filter_result: { type: [string, 'null'] }
+                            personal: { type: boolean }
+                            session_id: { type: string }
+                            user: { type: string, description: 'Masked email, e.g. tr***@stocksense.vn' }
+                            user_role: { type: string, enum: [retail, trader, analyst, admin] }
+                            content: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/role-requests:
+    get:
+      tags: [Admin]
+      summary: Analyst role requests (latest 100)
+      x-required-capability: admin.role-requests.manage
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [pending_review, approved, rejected] } }
+      responses:
+        '200':
+          description: Requests with the requester's email and current role
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          allOf:
+                            - { $ref: '#/components/schemas/RoleRequest' }
+                            - type: object
+                              properties:
+                                requester_email: { type: string, format: email }
+                                requester_role: { type: string, enum: [retail, trader, analyst, admin] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/role-requests/{id}/approve:
+    post:
+      tags: [Admin]
+      summary: Approve an analyst request
+      x-required-capability: admin.role-requests.manage
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Grants the analyst role, revokes the requester's sessions and writes the audit log. An admin cannot approve their own request.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Approved, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { status: { type: string, const: approved } } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: ROLE_REQUEST_ALREADY_DECIDED or SELF_APPROVAL_BLOCKED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/role-requests/{id}/reject:
+    post:
+      tags: [Admin]
+      summary: Reject an analyst request with a reason
+      x-required-capability: admin.role-requests.manage
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 1, description: Reason shown to the requester }
+      responses:
+        '200': { description: Rejected, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { status: { type: string, const: rejected } } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: ROLE_REQUEST_ALREADY_DECIDED or SELF_APPROVAL_BLOCKED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /market/board:
+    get:
+      tags: [Market]
+      summary: End-of-day price board of the 30 tracked symbols
+      x-required-capability: symbols.read
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Latest session from SSI with reference, ceiling and floor prices. Display-only symbols have forecasts null.
+      responses:
+        '200':
+          description: Board rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [date, items]
+                    properties:
+                      date: { type: [string, 'null'], format: date }
+                      items: { type: array, items: { $ref: '#/components/schemas/BoardRow' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
   securitySchemes:
-    SessionCookie: { type: apiKey, in: cookie, name: stocksense_session }
+    SessionCookie: { type: apiKey, in: cookie, name: stocksense_session, description: 'Web: HttpOnly cookie set by POST /auth/login (path /api/v1, SameSite=Lax).' }
+    BearerAuth: { type: http, scheme: bearer, description: 'Mobile: token returned by POST /auth/login with client=mobile, sent as Authorization: Bearer <token>. When a request carries both, the cookie is used.' }
     TelegramWebhookSecret: { type: apiKey, in: header, name: X-Telegram-Bot-Api-Secret-Token }
   parameters:
     Symbol: { in: path, name: symbol, required: true, schema: { type: string, pattern: '^[A-Z0-9.-]{1,12}$' } }
@@ -1075,6 +1417,84 @@ components:
         body: { type: string, maxLength: 4000 }
         tags: { type: array, maxItems: 10, items: { type: string, minLength: 1, maxLength: 24 } }
         lesson: { type: string, maxLength: 3000 }
+    MobileLoginEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [user, token, token_type, expires_in]
+          properties:
+            user: { $ref: '#/components/schemas/User' }
+            token: { type: string, description: Opaque session token; the database stores only its SHA-256 }
+            token_type: { type: string, const: Bearer }
+            expires_in: { type: integer, description: Seconds until the session expires (86400) }
+    MessageEnvelope:
+      type: object
+      required: [data]
+      properties: { data: { type: object, required: [message], properties: { message: { type: string } } } }
+    IndexGroups:
+      type: array
+      description: Index baskets of the symbol, VN30 first
+      items: { type: string, enum: [VN30, VN100, HNX30] }
+    BoardRow:
+      type: object
+      required: [symbol, name, exchange, indices, analysisEnabled, date, reference, ceiling, floor, close, change, changePercent, volume, forecasts]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        exchange: { type: string, enum: [HOSE, HNX, UPCOM] }
+        industry: { type: [string, 'null'] }
+        indices: { $ref: '#/components/schemas/IndexGroups' }
+        analysisEnabled: { type: boolean }
+        date: { type: string, format: date }
+        reference: { type: number, description: Previous adjusted close }
+        ceiling: { type: number, description: 'Reference + band (HOSE 7%, HNX 10%), rounded to tick size' }
+        floor: { type: number }
+        open: { type: [number, 'null'] }
+        high: { type: [number, 'null'] }
+        low: { type: [number, 'null'] }
+        close: { type: number }
+        change: { type: number }
+        changePercent: { type: number }
+        volume: { type: number }
+        turnover: { type: [number, 'null'] }
+        tones:
+          type: object
+          description: Board colour of each price versus reference/ceiling/floor
+          additionalProperties: { type: string, enum: [ceiling, up, ref, down, floor] }
+        forecasts:
+          type: object
+          description: Display-only symbols (analysisEnabled=false) return t2 and t5 as null
+          required: [t2, t5]
+          properties:
+            t2: { oneOf: [{ $ref: '#/components/schemas/Forecast' }, { type: 'null' }] }
+            t5: { oneOf: [{ $ref: '#/components/schemas/Forecast' }, { type: 'null' }] }
+        priceDataStatus: { type: string, enum: [live, demo, unavailable] }
+    RoleRequest:
+      type: object
+      required: [id, requested_role, organization, position, work_email, purpose, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        requested_role: { type: string, const: analyst }
+        organization: { type: string }
+        position: { type: string }
+        work_email: { type: string, format: email }
+        purpose: { type: string }
+        status: { type: string, enum: [pending_review, approved, rejected] }
+        note: { type: [string, 'null'], description: Reason given by the admin when rejecting }
+        decided_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+    RoleChangeResult:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [role, revoked_sessions]
+          properties:
+            role: { type: string, enum: [trader, retail] }
+            revoked_sessions: { type: integer, description: All sessions are revoked; the client must log in again }
     UserEnvelope:
       type: object
       required: [data]
@@ -1107,11 +1527,15 @@ components:
         confidence: { type: string, enum: [low, mid, high] }
     Symbol:
       type: object
-      required: [symbol, name, exchange, closePrice, changePercent, averageTurnover20d, dataStatus, forecasts]
+      required: [symbol, name, exchange, indices, analysisEnabled, closePrice, changePercent, averageTurnover20d, dataStatus, forecasts]
       properties:
         symbol: { type: string }
         name: { type: string }
         exchange: { type: string, enum: [HOSE, HNX, UPCOM] }
+        industry: { type: [string, 'null'] }
+        indices: { $ref: '#/components/schemas/IndexGroups' }
+        analysisEnabled: { type: boolean, description: 'false = display-only symbol: prices and news only, no forecast' }
+        dataFlags: { type: object, properties: { stalePrice: { type: boolean }, missingNews: { type: boolean } } }
         closePrice: { type: number }
         priceDate: { type: [string, 'null'], format: date }
         priceDataStatus: { type: string, enum: [live, demo, unavailable] }
@@ -1119,7 +1543,8 @@ components:
         averageTurnover20d: { type: number }
         dataStatus: { type: string }
         forecasts:
-          type: object
+          type: [object, 'null']
+          description: null for display-only symbols (analysisEnabled=false)
           required: [t2, t5]
           properties:
             t2: { $ref: '#/components/schemas/Forecast' }
@@ -1155,7 +1580,23 @@ components:
         interval: { type: string, const: 1d }
         sourceStatus: { type: string, enum: [live, demo, mixed] }
         latestDate: { type: string, format: date }
-        items: { type: array, items: { type: object, required: [date, close], properties: { date: { type: string, format: date }, close: { type: number } } } }
+        items:
+          type: array
+          items:
+            type: object
+            required: [date, open, high, low, close, volume]
+            properties:
+              date: { type: string, format: date }
+              open: { type: number }
+              high: { type: number }
+              low: { type: number }
+              close: { type: number }
+              volume: { type: number }
+              turnover: { type: [number, 'null'] }
+              adjOpen: { type: number, description: Adjusted for dividends and share issues }
+              adjHigh: { type: number }
+              adjLow: { type: number }
+              adjClose: { type: number }
     NewsList:
       type: object
       required: [items]

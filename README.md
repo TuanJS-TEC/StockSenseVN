@@ -50,12 +50,25 @@ Trong `.env`, đặt `AUTH_RATE_LIMIT_SECRET` là một chuỗi ngẫu nhiên í
 
 ## Chạy
 
-Mở ba terminal:
+API và worker chạy trong Docker cùng PostgreSQL; chỉ web chạy bằng npm:
 
 ```sh
-npm run dev:api                    # API tại http://127.0.0.1:3000
+docker compose up -d --build       # db + api (http://127.0.0.1:3000) + worker; lần sau chỉ cần bật Docker Desktop
 npm run dev:web                    # Web tại http://localhost:5173 (proxy /api sang cổng 3000)
-npm run worker:admin-jobs:watch    # worker chạy liên tục: hàng đợi job Admin và pipeline 15:30
+```
+
+- `api` tự chạy migration còn thiếu rồi mới khởi động; `worker` chạy hàng đợi job Admin và pipeline 15:30. Cả hai có `restart: unless-stopped` nên tự bật lại khi Docker Desktop khởi động, dữ liệu tự cập nhật mỗi ngày giao dịch mà không cần mở terminal.
+- Container đọc cấu hình từ `.env` (SMTP, Telegram, `AUTH_RATE_LIMIT_SECRET`...); riêng `DATABASE_URL` được compose đặt lại để trỏ tới service `db`. Sau khi sửa `.env` hoặc mã nguồn api/worker, chạy lại `docker compose up -d --build`.
+- Xem log: `docker compose logs -f api` hoặc `docker compose logs -f worker`.
+- Điện thoại cùng Wi-Fi gọi API (thử app mobile): thêm `API_BIND=0.0.0.0` vào `.env`, chạy lại `docker compose up -d`, rồi dùng `http://<IP máy>:3000/api/v1`. Mặc định API chỉ mở cho chính máy này.
+- App mobile (Expo, thư mục `mobile/`, có `node_modules` riêng): `cd mobile && npm install && npm start`, rồi quét mã QR bằng Expo Go. Chi tiết ở `mobile/README.md`.
+- Tên project Compose cố định là `n` để dùng lại container `n-db-1` và volume dữ liệu `n_stocksense_pgdata` đã có.
+
+Khi sửa mã API và muốn tự nạp lại theo từng lần lưu, tắt container API rồi chạy bằng npm (worker trong Docker vẫn chạy bình thường):
+
+```sh
+docker compose stop api
+npm run dev:api                    # API tại http://127.0.0.1:3000, dùng DATABASE_URL trong .env
 ```
 
 Nạp dữ liệu thật ngay (không cần chờ lịch):
@@ -68,7 +81,7 @@ npm run worker:notifications:deliver
 
 Nạp lịch sử tin theo mã từ một ngày (chạy trong `apps/worker`, mất vài phút): `node --env-file=../../.env src/news-cli.js --from 2021-01-01`.
 
-Worker ở chế độ `watch` tự xếp hàng pipeline hằng ngày (giá → tin → cảnh báo → gửi thông báo) sau 15:30 giờ Việt Nam, thứ Hai đến thứ Sáu. Đổi giờ bằng `ADMIN_JOBS_SCHEDULE_TIME=HH:MM`, tắt bằng `ADMIN_JOBS_SCHEDULE=off`. Job lỗi được thử lại tối đa 3 lần; nếu vẫn lỗi, mọi Admin nhận cảnh báo ở chuông thông báo, kèm email/Telegram nếu Admin đã liên kết kênh trong Cài đặt → Kênh thông báo.
+Worker (container `worker`, hoặc `npm run worker:admin-jobs:watch` nếu không dùng Docker) tự xếp hàng pipeline hằng ngày (giá → tin → cảnh báo → gửi thông báo) sau 15:30 giờ Việt Nam, thứ Hai đến thứ Sáu. Đổi giờ bằng `ADMIN_JOBS_SCHEDULE_TIME=HH:MM`, tắt bằng `ADMIN_JOBS_SCHEDULE=off`. Job lỗi được thử lại tối đa 3 lần; nếu vẫn lỗi, mọi Admin nhận cảnh báo ở chuông thông báo, kèm email/Telegram nếu Admin đã liên kết kênh trong Cài đặt → Kênh thông báo.
 
 ## Tài khoản
 
@@ -147,6 +160,7 @@ Admin không đọc được Portfolio, Trade Plan, Journal của người dùng
 ```sh
 npm test            # vitest cho packages/core, API và worker
 npm run build:web   # kiểm tra build giao diện
+cd mobile && npm run check:bundle   # đóng gói app mobile cho Android và iOS
 ```
 
 ## Chế độ không cần CSDL

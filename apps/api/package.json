@@ -11,6 +11,7 @@
     "db:bootstrap-admin": "node --env-file-if-exists=../../.env ../../db/bootstrap-admin.js"
   },
   "dependencies": {
+    "@fastify/compress": "^8.3.1",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.1",
     "@fastify/helmet": "^13.2.0",

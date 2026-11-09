@@ -6,9 +6,13 @@
   "exports": {
     "./access": "./src/access/roles.js",
     "./labels": "./src/labels/forecast.js",
+    "./disclaimer": "./src/labels/disclaimer.js",
     "./calc": "./src/calc/riskReward.js",
     "./price-board": "./src/market/priceBoard.js",
     "./indicators": "./src/market/indicators.js",
+    "./quote": "./src/market/quote.js",
+    "./calendar": "./src/market/calendar.js",
+    "./symbol-groups": "./src/market/symbolGroups.js",
     "./password": "./src/auth/passwordPolicy.js"
   }
 }

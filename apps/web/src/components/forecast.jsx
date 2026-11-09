@@ -20,20 +20,6 @@ export function Confidence({ level }) {
   return <><span className={`conf lv${lv}`} title={`Mức tin cậy ${text}`}><i /><i /><i /></span> <span>{text}</span></>;
 }
 
-// FR-M2-03: adds trading days to an ISO date, skipping weekends and exchange holidays (from /market/status).
-export function addTradingDays(isoDate, days, holidays = []) {
-  if (!isoDate) return null;
-  const closed = new Set(holidays);
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  let left = days;
-  while (left > 0) {
-    date.setUTCDate(date.getUTCDate() + 1);
-    const iso = date.toISOString().slice(0, 10);
-    if (date.getUTCDay() !== 0 && date.getUTCDay() !== 6 && !closed.has(iso)) left -= 1;
-  }
-  return date.toISOString().slice(0, 10);
-}
-
 export function ForecastCard({ horizon, forecast, dueDate }) {
   const p = forecast?.probabilities ?? {};
   const top = forecast?.label ? p[forecast.label] : null;

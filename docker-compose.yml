@@ -1,3 +1,7 @@
+# Fixed project name: the existing database container (n-db-1) and its data volume (n_stocksense_pgdata)
+# were created under this name, so every checkout reuses them instead of starting an empty database.
+name: n
+
 services:
   db:
     image: postgres:17-alpine
@@ -15,6 +19,50 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # REST API /api/v1 for the web app and the mobile app. Applies pending migrations, then starts.
+  api:
+    build: .
+    image: stocksense-app
+    restart: unless-stopped
+    command: ["sh", "-c", "node db/migrate.js && exec node apps/api/src/server.js"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-stocksense}:${POSTGRES_PASSWORD:-stocksense_dev_password}@db:5432/${POSTGRES_DB:-stocksense}
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+    ports:
+      # 127.0.0.1 = this machine only. Set API_BIND=0.0.0.0 in .env to let a phone on the same Wi-Fi reach the API.
+      - "${API_BIND:-127.0.0.1}:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/me').then((r) => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  # Job queue and daily pipeline: after 15:30 (ICT) on trading days it syncs SSI prices, news,
+  # price/Trade Plan alerts and notifications. Also runs jobs queued from the Admin page.
+  worker:
+    build: .
+    image: stocksense-app
+    restart: unless-stopped
+    command: ["node", "apps/worker/src/admin-jobs-cli.js", "--watch"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-stocksense}:${POSTGRES_PASSWORD:-stocksense_dev_password}@db:5432/${POSTGRES_DB:-stocksense}
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
 volumes:
   stocksense_pgdata:

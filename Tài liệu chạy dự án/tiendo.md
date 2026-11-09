@@ -250,6 +250,32 @@ M6-01 → M6-07: ❌, cần dự báo thật.
 ### M14. App mobile — 0/5
 ❌, thuộc giai đoạn 3.
 
+Chuẩn bị phía API (09/11/2026): đăng nhập với `client: "mobile"` trả `token`, `token_type: "Bearer"`, `expires_in` (86.400 giây) trong thân phản hồi và không đặt cookie. Mọi route nhận `Authorization: Bearer <token>`, kể cả PDF; nếu request có cả cookie thì cookie được ưu tiên. Đăng xuất bằng Bearer thu hồi phiên. Kiểm thử 19/19; web dùng cookie không đổi (API smoke 19/19, unit 99/99).
+
+`openapi.yaml` (09/11/2026) phủ đủ 90/90 route của API, mọi route có xác thực khai báo cả `SessionCookie` và `BearerAuth`. Kiểm bằng Redocly: hợp lệ OpenAPI 3.1, không lỗi. Phản hồi thật của 11 endpoint (đăng nhập web/mobile, bảng giá, danh sách mã, chi tiết mã, giá 5 năm, tổng quan thị trường, /me, đồng ý điều khoản, yêu cầu nâng quyền) khớp schema trong spec.
+
+`packages/core` (09/11/2026) có thêm 3 module để mobile dùng chung với web: `@stocksense/core/calendar` (cộng phiên giao dịch bỏ cuối tuần và ngày lễ, mốc 15:00 của tin), `@stocksense/core/quote` (giá điều chỉnh, số liệu ô giá trang chi tiết mã: +/− theo tham chiếu đã điều chỉnh, tuần/tháng/quý/YTD, vùng 52 tuần, KL TB 20 phiên), `@stocksense/core/symbol-groups` (nhóm VN30/VN100/HNX30/sàn và câu "Hệ thống chưa hỗ trợ phân tích sâu mã này"). Web và kiểm tra bộ lọc Screener của API đã chuyển sang dùng các module này. Unit 110/110 (thêm 11), UI 16/16, icon 7 trang không lỗi.
+
+API nén phản hồi (09/11/2026) bằng `@fastify/compress` (br/gzip/deflate theo `Accept-Encoding`, bỏ qua phản hồi dưới 1 KB và PDF). Giá 5 năm một mã 244 KB → 49 KB, bảng giá 16,5 → 3,0 KB, danh sách mã 12,3 → 2,1 KB, tin 18,1 → 5,8 KB; giải nén ra đúng JSON gốc. Mở biểu đồ trên Fast 4G giả lập: trung vị 1.249 → 1.103 ms.
+
+App mobile (09/11/2026), thư mục `mobile/`, đang làm, chưa tính điểm. Điểm M14 chỉ được tính sau khi chạy kịch bản AC-25 trên thiết bị thật hoặc máy ảo iOS và Android.
+- Nền tảng: React Native với Expo SDK 58 (React Native 0.88, React 19.3), dùng Expo Router.
+- Dùng chung `packages/core` với web: quyền theo vai trò, nhãn dự báo, lịch giao dịch, nhóm mã. Chuỗi tuyên bố trách nhiệm chuyển vào module mới `@stocksense/core/disclaimer`, web cũng dùng module này (FR-M14-05).
+- Đã có:
+  - Đăng nhập bằng Bearer, token lưu trong Keychain/Keystore qua `expo-secure-store` (FR-M14-04).
+  - Nhận 401 hoặc token hết 24 giờ thì xóa token và quay về đăng nhập.
+  - Đăng xuất thu hồi phiên trên máy chủ rồi xóa token.
+  - Tab đáy theo SDD §8.3, ẩn tab mà vai trò không có quyền.
+  - Màn Tổng quan và màn chi tiết mã: thẻ dự báo T+2/T+5 kèm ngày đáo hạn, tin tức, thông báo "Chỉ giá" cho mã chỉ hiển thị.
+- Màn giữ chỗ: Watchlist, Portfolio, Trade Plan, Journal, Chat, Thông báo.
+- Kiểm tra (09/11/2026):
+  - Đóng gói Android và iOS thành công (Hermes); `expo-doctor` đạt 20/20.
+  - Chạy bản web của app ở cỡ màn hình 390×844, gọi API thật, đạt 31/31 kịch bản: đăng nhập sai và đúng, không đặt cookie, đủ 30 mã, lọc nhóm, tìm kiếm, ngày đáo hạn FPT 09/10 và 14/10, mã BID chỉ có giá, giữ phiên khi tải lại, phiên bị thu hồi thì quay về đăng nhập, đăng xuất thu hồi token trên máy chủ.
+  - Kiểm lại theo vai trò retail và analyst (tab theo bảng quyền, 30 mã, thẻ dự báo, nhãn vai trò): đạt. Kiểm khi máy chủ mất kết nối (màn "Chưa kết nối", bấm Thử lại thì không phải đăng nhập lại) và khi token quá 24 giờ (quay về đăng nhập, xóa token): đạt.
+  - Định dạng số và giờ không dùng tùy chọn Intl mà Hermes trên điện thoại có thể thiếu; 38/38 mẫu khớp với cách định dạng của web.
+  - Đường mạng cho điện thoại thật: Metro phục vụ manifest và bundle Android qua IP Wi-Fi. API phải bật `API_BIND=0.0.0.0` và mở cổng 3000 trên Windows Firewall, xem `mobile/README.md`.
+  - Chưa chạy trên điện thoại hoặc máy ảo, vì máy phát triển chưa có Android SDK.
+
 ## 5. Ưu tiên tiếp theo
 
 1. **Pipeline dự báo tối thiểu** (baseline Logistic Regression/XGBoost) ghi vào bảng `forecasts` và chạy trong lịch 15:30 đã có. Riêng bước này mở khóa khoảng 25 FR đang ở mức "một phần" hoặc "chưa làm" (M1, M2, M5-02/03, M8, M9-04, M10-02/06, M11, M13). Hạ tầng hiển thị, cảnh báo và PDF đã sẵn sàng nhận dự báo thật.
@@ -257,7 +283,7 @@ M6-01 → M6-07: ❌, cần dự báo thật.
 3. **M3** giải thích tối thiểu: tỷ trọng 3 nhóm + 3 câu mẫu.
 4. **Sentiment thật** cho M4.
 5. **M12 Chat**: cần chọn mô hình ngôn ngữ trước.
-6. **Cấu hình vận hành:** SMTP/Telegram thật trong `.env`, chạy `npm run worker:admin-jobs:watch` thường trực để pipeline 15:30 tự chạy.
+6. **Cấu hình vận hành:** SMTP/Telegram thật trong `.env`. Pipeline 15:30 chạy trong container `worker` (`docker compose up -d --build`), tự bật cùng Docker Desktop.
 
 ## 6. Chênh lệch giữa thiết kế (SDD, PRD) và code hiện tại
 
@@ -270,10 +296,10 @@ Ba tài liệu chính chỉ mô tả hệ thống cần xây; các điểm code 
 | Pipeline bỏ qua ngày nghỉ lễ theo trading_calendar | Đã có bảng market_holidays (2025–2026 lấy từ các ngày VN-Index không có phiên, cộng 01/01/2027); cần bổ sung ngày lễ mỗi năm khi sàn công bố |
 | Route cần mô hình: /symbols/{sym}/forecast, /sentiment, /history, /forecasts/{id}/audit, /inputs, /replays, /models/*, /model-versions, /admin/models | Chưa có; trang Đánh giá mô hình hiện "Sắp có" |
 | Chat: chặn lệnh, truy xuất, mô hình ngôn ngữ, kiểm tra đầu ra | Chặn lệnh, truy xuất, kiểm tra đầu ra, log đã có; câu trả lời dựng bằng mẫu, chưa có mô hình ngôn ngữ diễn đạt |
-| API nhận Bearer token cho mobile | API chỉ nhận cookie; app mobile chưa làm (GĐ3) |
+| POST /auth/register nhận cờ `accept_terms`, `accept_privacy` (SDD mục 5 và 8.1) | Code và web dùng `terms_accepted`, `privacy_accepted`; openapi.yaml ghi theo code |
 | admin_audit_log có trigger CSDL từ chối UPDATE/DELETE; log tệp giữ 90 ngày | Chưa có trigger; API không có route sửa/xóa. Log chỉ ra console |
 | RLS là phương án tăng cường trước khi mở cho người dùng thật (D13) | Chưa bật RLS; cách ly bằng điều kiện user_id trong repository |
-| Triển khai công khai: Docker Compose đủ dịch vụ, reverse proxy HTTPS | Docker Compose mới có PostgreSQL; api, worker, web chạy bằng npm |
+| Triển khai công khai: Docker Compose đủ dịch vụ, reverse proxy HTTPS | Docker Compose có db, api, worker (09/11/2026, một image Node chung từ `Dockerfile`); chưa có worker mô hình, reverse proxy HTTPS và container web (web vẫn chạy bằng npm) |
 | Quy tắc đăng ký BR-R09 (captcha), BR-R13 (xác nhận email cơ quan bằng thư, bản ghi đồng ý Điều khoản Analyst), BR-R15 (Admin nhập lại mật khẩu, chỉ email tổ chức, TOTP), BR-R18 (đồng ý lại khi đổi phiên bản) | Chưa làm (FR-M0-10 một phần, FR-M0-15) |
 | BR-R20 quy trình báo sự cố lộ lọt dữ liệu trong 72 giờ | Chưa xây dựng (quy trình vận hành, ngoài code) |
 | Trang Bảng giá (/board, GET /market/board) và biểu đồ nến trên trang chi tiết mã | Đã làm theo yêu cầu bổ sung của nhóm; chưa có trong PRD/SDD |

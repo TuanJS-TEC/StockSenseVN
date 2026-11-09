@@ -1,3 +1,4 @@
+import { INDEX_GROUPS } from '@stocksense/core/symbol-groups';
 import { ApiError } from '../errors.js';
 
 const MAX_SAVED_FILTERS = 20;
@@ -50,7 +51,7 @@ export function validateScreenerFilters(filters) {
     normalized.exchange = filters.exchange;
   }
   if (filters.index !== undefined && filters.index !== '') {
-    if (!['VN30', 'VN100', 'HNX30'].includes(filters.index)) throw new ApiError(422, 'VALIDATION_ERROR', 'Invalid index group.');
+    if (!INDEX_GROUPS.includes(filters.index)) throw new ApiError(422, 'VALIDATION_ERROR', 'Invalid index group.');
     normalized.index = filters.index;
   }
   if (filters.industry !== undefined && filters.industry !== '') {

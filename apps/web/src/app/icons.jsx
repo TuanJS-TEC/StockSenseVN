@@ -1,3 +1,4 @@
+import { DISCLAIMER } from '@stocksense/core/disclaimer';
 // App icons come from Lucide (lucide-react, ISC licence); names below are the ones used across the app.
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, ChartColumn, ChartPie, ChevronDown, ChevronUp, Download, Ellipsis,
@@ -21,6 +22,6 @@ export function Icon({ name, className = '', filled = false }) {
 }
 
 // Disclaimer strip used under forecast-related content (prototype `.disc`).
-export function Disclaimer({ children = 'Dự báo chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.' }) {
+export function Disclaimer({ children = DISCLAIMER }) {
   return <div className="disc"><Icon name="info" /><span>{children}</span></div>;
 }
