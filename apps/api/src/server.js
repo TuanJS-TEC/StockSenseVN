@@ -26,6 +26,8 @@ import { createNotificationPreferencesRepository, createNotificationChannelsRepo
 import { emailProviderConfigured, telegramProviderConfigured, sendVerificationEmail, sendPasswordResetEmail, sendRegistrationVerificationEmail, sendAccountAlreadyExistsEmail, sendTestEmail, sendTelegramMessage } from './notifications/providers.js';
 import { ApiError } from './errors.js';
 import { createFixtureMarketRepository, createPostgresMarketRepository, PRICE_RANGES } from './market/repository.js';
+import { parseRange } from './market/nlp-news.js';
+import { createNewsHub, startNewsListener } from './market/news-hub.js';
 import { createPdfReport, formatReportValue } from './reports/pdf.js';
 
 if (process.env.NODE_ENV === 'production') {
@@ -771,7 +773,7 @@ function parseJournalFilters(query) {
 async function sendPdf(reply, filename, report) {
   const status = await market.status();
   const meta = status
-    ? `Ngày dữ liệu: ${status.dataDate} · Phiên bản mô hình: ${status.modelVersion}${status.state === 'demo' ? ' (dữ liệu mẫu, mô hình AI chưa triển khai)' : ''}`
+    ? `Ngày dữ liệu: ${status.dataDate} · Phiên bản mô hình: ${status.modelVersion}${status.state === 'demo' ? ' (dữ liệu mẫu, mô hình AI chưa triển khai)' : status.state === 'experimental' ? ' (mô hình thử nghiệm, hướng Tăng/Giảm chưa được kiểm chứng)' : ''}`
     : 'Ngày dữ liệu: chưa có batch dữ liệu thị trường';
   const pdf = await createPdfReport({ ...report, meta });
   return reply.header('Content-Type', 'application/pdf')
@@ -876,6 +878,31 @@ app.get('/api/v1/symbols/:symbol/news', { preHandler: requireCapability('news.re
   return data ? envelope(data) : fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy mã cổ phiếu.');
 });
 
+app.get('/api/v1/symbols/:symbol/nlp-news', { preHandler: requireCapability('news.read') }, async (request, reply) => {
+  const range = parseRange(request.query, new Date());
+  if (!range) return fail(reply, request, 400, 'INVALID_RANGE', 'Khoảng ngày không hợp lệ (from/to dạng YYYY-MM-DD, from <= to).');
+  const data = await market.nlpNews(request.params.symbol, range);
+  return data ? envelope(data) : fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy mã cổ phiếu.');
+});
+
+// Server-Sent Events: tells the browser to refetch when the bridge reports new NLP news for this symbol.
+app.get('/api/v1/symbols/:symbol/nlp-news/stream', { preHandler: requireCapability('news.read') }, (request, reply) => {
+  const symbol = request.params.symbol.toUpperCase();
+  reply.hijack();
+  const res = reply.raw;
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+  res.on('error', () => {}); // a write to a half-closed socket must not crash the process; 'close' cleans up
+  res.write(': connected\n\n');
+  const unsubscribe = newsHub.subscribe(symbol, () => res.write(`event: news\ndata: ${JSON.stringify({ symbol })}\n\n`));
+  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+  request.raw.on('close', () => { clearInterval(ping); unsubscribe(); });
+});
+
+app.get('/api/v1/symbols/:symbol/nlp-news/times', { preHandler: requireCapability('news.read') }, async (request, reply) => {
+  const data = await market.nlpNewsTimes(request.params.symbol);
+  return data ? envelope(data) : fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy mã cổ phiếu.');
+});
+
 app.get('/api/v1/watchlist', { preHandler: [requireCapability('watchlist.manage.self'), requirePersonalStore] }, async (request) =>
   envelope(await personalMarketTools.list(request.user.id)));
 app.put('/api/v1/watchlist/:symbol', { preHandler: [requireCapability('watchlist.manage.self'), requirePersonalStore] }, async (request, reply) => {
@@ -932,7 +959,9 @@ app.patch('/api/v1/alerts/:id', { preHandler: [requireCapability('alerts.inbox.r
 
 app.setNotFoundHandler((request, reply) => fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy endpoint.'));
 
-app.addHook('onClose', async () => { if (pool) await pool.end(); });
+const newsHub = createNewsHub();
+const newsListener = databaseEnabled ? startNewsListener(pool, newsHub) : null;
+app.addHook('onClose', async () => { await newsListener?.stop(); if (pool) await pool.end(); });
 const port = Number(process.env.API_PORT || 3000);
 if (pool) await pool.query('SELECT 1');
 await app.listen({ port, host: process.env.API_HOST || '127.0.0.1' });

@@ -3,6 +3,7 @@ import { Icon } from '../app/icons.jsx';
 
 // Forecast display pieces from the HTML prototype (`.lab`, `.conf`, `.fc`).
 export const CONFIDENCE = { low: [1, 'Thấp'], mid: [2, 'Trung bình'], high: [3, 'Cao'] };
+const formatDay = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('vi-VN') : '—');
 const percent = (value) => (value == null ? '—' : `${Math.round(value * 100)}%`);
 
 export function Lab({ label, children }) {
@@ -12,7 +13,7 @@ export function Lab({ label, children }) {
 
 export function MiniLab({ forecast }) {
   if (!forecast?.label) return <span className="muted">—</span>;
-  return <><Lab label={forecast.label} /> <span className="num muted small">{percent(forecast.probabilities?.[forecast.label])}</span></>;
+  return <><Lab label={forecast.label} /> <span className="num muted small">{percent(forecast.probabilities?.[forecast.label])}</span>{forecast.stale && <span className="muted small" title={`Dự báo cũ ngày ${formatDay(forecast.dataDate)}`}> (cũ)</span>}</>;
 }
 
 export function Confidence({ level }) {
@@ -31,6 +32,6 @@ export function ForecastCard({ horizon, forecast, dueDate }) {
       <i className="bg-up" style={{ width: `${(p.up ?? 0) * 100}%` }} /><i className="bg-hold" style={{ width: `${(p.hold ?? 0) * 100}%` }} /><i className="bg-down" style={{ width: `${(p.down ?? 0) * 100}%` }} />
     </div>
     <div className="plegend num"><span className="c-up"><Icon name="up" /> {percent(p.up)}</span><span className="c-hold"><Icon name="hold" /> {percent(p.hold)}</span><span className="c-down"><Icon name="down" /> {percent(p.down)}</span></div>
-    <div className="fc-f"><Confidence level={forecast?.confidence} />{top != null && top < 0.45 && <span className="chip hold">Độ tin cậy thấp</span>}</div>
+    <div className="fc-f"><Confidence level={forecast?.confidence} />{top != null && top < 0.45 && <span className="chip hold">Độ tin cậy thấp</span>}{forecast?.stale && <span className="chip down">Dự báo cũ · {formatDay(forecast.dataDate)}</span>}</div>
   </div>;
 }

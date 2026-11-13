@@ -462,15 +462,9 @@ export const mockApi = {
       });
       return { symbol, currency: 'VND', interval: '1d', sourceStatus: 'demo', latestDate: points.at(-1).date, items: points };
     },
-    async news(symbol) {
-      await delay();
-      const item = marketMock.symbols.items.find((row) => row.symbol === symbol);
-      if (!item) { const error = new Error('Không tìm thấy mã cổ phiếu.'); error.status = 404; throw error; }
-      return { items: [
-        { id: `${symbol}-news-1`, title: `${item.name}: cập nhật hoạt động kinh doanh`, summary: 'Tin mẫu để hoàn thiện luồng giao diện. Nội dung thực tế sẽ được cung cấp từ nguồn tin đã cấp phép.', source: 'StockSense Demo', publishedAt: '2026-10-07T09:30:00+07:00', sentiment: 'neutral', url: null },
-        { id: `${symbol}-news-2`, title: `Diễn biến đáng chú ý quanh cổ phiếu ${symbol}`, summary: 'Bản tin minh họa; cần đối chiếu nguồn và thời điểm công bố khi thay bằng dữ liệu thật.', source: 'StockSense Demo', publishedAt: '2026-10-06T14:15:00+07:00', sentiment: 'positive', url: null },
-      ] };
-    },
+    async nlpNews() { await delay(); return { items: [] }; },
+    async nlpNewsTimes() { await delay(); return { items: [] }; },
+    newsStream() { return () => {}; },
   },
   watchlist: {
     async list() { await delay(); return { items: structuredClone(userCollection(mockWatchlists)) }; },

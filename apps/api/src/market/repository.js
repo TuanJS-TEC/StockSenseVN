@@ -1,5 +1,6 @@
 import { marketMock } from '../../../../mocks/market.js';
 import { buildBoardQuote } from '@stocksense/core/price-board';
+import { defaultWindow, mapNlpNews, vnDayRange } from './nlp-news.js';
 
 const number = (value) => value === null || value === undefined ? null : Number(value);
 // Months of daily bars returned for each chart range.
@@ -71,6 +72,8 @@ export function createFixtureMarketRepository() {
       });
         return { symbol: symbol.toUpperCase(), currency: 'VND', interval: '1d', sourceStatus: 'demo', latestDate: items.at(-1).date, items };
     },
+    async nlpNews(symbol, { from, to }) { return bySymbol(symbol) ? { from, to, items: [] } : null; },
+    async nlpNewsTimes(symbol) { return bySymbol(symbol) ? { items: [] } : null; },
     async news(symbol) {
       const item = bySymbol(symbol);
       if (!item) return null;
@@ -91,19 +94,25 @@ export function createPostgresMarketRepository(pool) {
   }
 
   // FR-M2-07: a symbol's data is "stale" when its last bar is older than the market's last session,
-  // and "missing news" when no article was linked in the last 7 days.
+  // and "missing news" when the default news list (VN days today-7..today) is empty.
   async function readSymbol(symbol) {
     const { rows } = await pool.query(`${symbolSelect}
       WHERE price.close_price IS NOT NULL AND s.symbol = $1 AND s.is_enabled = true LIMIT 1`, [symbol.toUpperCase()]);
     if (!rows[0]) return null;
     const item = mapSymbol(rows[0]);
+    const window = defaultWindow(new Date());
     const { rows: flags } = await pool.query(`SELECT
         (SELECT max(trade_date)::text FROM daily_prices WHERE source = 'ssi') AS market_date,
-        (SELECT count(*)::integer FROM news_item_symbols l JOIN news_items n ON n.id = l.news_item_id
-          WHERE l.symbol = $1 AND n.published_at >= now() - interval '7 days') AS recent_news`, [item.symbol]);
+        (SELECT count(*)::integer FROM nlp_news WHERE symbol = $1 AND published_at >= $2 AND published_at < $3) AS recent_news`, [item.symbol, window.start, window.end]);
     const stalePrice = Boolean(flags[0].market_date && item.priceDate && item.priceDate < flags[0].market_date);
-    const missingNews = flags[0].recent_news === 0;
-    return { ...item, dataFlags: { stalePrice, missingNews }, dataStatus: stalePrice ? 'stale' : missingNews ? 'missing_news' : 'complete' };
+    const recentNews = flags[0].recent_news;
+    const missingNews = recentNews === 0;
+    return { ...item, dataFlags: { stalePrice, missingNews, recentNews }, dataStatus: stalePrice ? 'stale' : missingNews ? 'missing_news' : 'complete' };
+  }
+
+  async function enabledSymbol(code) {
+    const { rowCount } = await pool.query('SELECT 1 FROM symbols WHERE symbol = $1 AND is_enabled = true', [code]);
+    return rowCount > 0;
   }
 
   return {
@@ -213,14 +222,12 @@ export function createPostgresMarketRepository(pool) {
     symbol: readSymbol,
     // End-of-day price board: last two bars per enabled symbol give reference, ceiling and floor.
     async board() {
-      const { rows } = await pool.query(`WITH latest AS (SELECT id FROM market_batches ORDER BY data_date DESC, id DESC LIMIT 1)
+      const { rows } = await pool.query(`WITH ${LATEST_BATCH}
         SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL}, bars.items AS bars,
-          f2.label AS t2_label, f2.probability_up AS t2_up, f2.probability_hold AS t2_hold, f2.probability_down AS t2_down, f2.confidence AS t2_confidence,
-          f5.label AS t5_label, f5.probability_up AS t5_up, f5.probability_hold AS t5_hold, f5.probability_down AS t5_down, f5.confidence AS t5_confidence
+          ${FORECAST_COLS}
         FROM symbols s
         LEFT JOIN latest ON true
-        LEFT JOIN forecasts f2 ON f2.symbol = s.symbol AND f2.batch_id = latest.id AND f2.horizon = 't2'
-        LEFT JOIN forecasts f5 ON f5.symbol = s.symbol AND f5.batch_id = latest.id AND f5.horizon = 't5'
+        ${FORECAST_JOINS}
         LEFT JOIN LATERAL (
           SELECT json_agg(bar ORDER BY bar.date DESC) AS items FROM (
             SELECT p.trade_date::text AS date, p.open, p.high, p.low, p.close, p.volume, p.turnover, p.adj_close, p.source
@@ -234,13 +241,11 @@ export function createPostgresMarketRepository(pool) {
         ORDER BY s.symbol`);
       const toBar = (bar) => bar && { date: bar.date, open: number(bar.open), high: number(bar.high), low: number(bar.low),
         close: number(bar.close), volume: number(bar.volume), turnover: number(bar.turnover), adjClose: number(bar.adj_close) };
-      const forecast = (row, h) => (row[`${h}_label`] ? { label: row[`${h}_label`], confidence: row[`${h}_confidence`],
-        probabilities: { up: number(row[`${h}_up`]), hold: number(row[`${h}_hold`]), down: number(row[`${h}_down`]) } } : null);
       const items = rows.map((row) => ({
         symbol: row.symbol, name: row.name, exchange: row.exchange, industry: row.industry,
         indices: row.indices, analysisEnabled: row.analysis_enabled,
         ...buildBoardQuote(row.exchange, toBar(row.bars[0]), toBar(row.bars[1])),
-        forecasts: row.analysis_enabled ? { t2: forecast(row, 't2'), t5: forecast(row, 't5') } : { t2: null, t5: null },
+        forecasts: row.analysis_enabled ? { t2: forecastOf(row, 't2'), t5: forecastOf(row, 't5') } : { t2: null, t5: null },
         priceDataStatus: row.bars[0].source === 'ssi' ? 'live' : 'demo',
       }));
       const date = items.reduce((max, item) => (item.date && item.date > max ? item.date : max), '');
@@ -280,18 +285,51 @@ export function createPostgresMarketRepository(pool) {
       }
       return { items: rows.map((row) => ({ id: row.id, title: row.title, summary: row.summary, source: row.source, publishedAt: row.published_at.toISOString(), sentiment: row.sentiment, url: row.url })) };
     },
+    async nlpNews(symbol, { from, to }) {
+      const code = symbol.toUpperCase();
+      if (!(await enabledSymbol(code))) return null;
+      const { start, end } = vnDayRange(from, to);
+      const { rows } = await pool.query(`SELECT document_id, title, url, source, published_at, relation, p_pos, p_neu, p_neg,
+        uncertain, risk_flags, passage, model_version FROM nlp_news
+        WHERE symbol = $1 AND published_at >= $2 AND published_at < $3 ORDER BY published_at DESC LIMIT 500`, [code, start, end]);
+      return { from, to, items: rows.map(mapNlpNews) };
+    },
+    async nlpNewsTimes(symbol) {
+      const code = symbol.toUpperCase();
+      if (!(await enabledSymbol(code))) return null;
+      const { rows } = await pool.query('SELECT published_at FROM nlp_news WHERE symbol = $1 ORDER BY published_at DESC', [code]);
+      return { items: rows.map((row) => row.published_at.toISOString()) };
+    },
   };
 }
 
-const symbolSelect = `WITH latest AS (SELECT id FROM market_batches ORDER BY data_date DESC, id DESC LIMIT 1)
+const LATEST_BATCH = 'latest AS (SELECT id, data_date, model_version FROM market_batches ORDER BY data_date DESC, id DESC LIMIT 1)';
+// SDD AC-06/28: a symbol missing from the newest batch (its price sync failed, or the model skipped it) keeps its newest
+// forecast of the same model version from the last 7 days, tagged stale, instead of showing nothing.
+const forecastJoin = (h) => `LEFT JOIN LATERAL (
+    SELECT f.label, f.probability_up, f.probability_hold, f.probability_down, f.confidence,
+      b.data_date::text AS data_date, b.data_date < latest.data_date AS stale
+    FROM forecasts f JOIN market_batches b ON b.id = f.batch_id
+    WHERE f.symbol = s.symbol AND f.horizon = '${h}' AND b.model_version = latest.model_version
+      AND b.data_date BETWEEN latest.data_date - 7 AND latest.data_date
+    ORDER BY b.data_date DESC, b.id DESC LIMIT 1
+  ) f${h.slice(1)} ON true`;
+const FORECAST_JOINS = `${forecastJoin('t2')}\n  ${forecastJoin('t5')}`;
+const FORECAST_COLS = ['t2', 't5'].map((h) => { const f = `f${h.slice(1)}`;
+  return `${f}.label AS ${h}_label, ${f}.probability_up AS ${h}_up, ${f}.probability_hold AS ${h}_hold, ${f}.probability_down AS ${h}_down, `
+    + `${f}.confidence AS ${h}_confidence, ${f}.data_date AS ${h}_date, ${f}.stale AS ${h}_stale`; }).join(',\n    ');
+// dataDate is the session the forecast was made on; due dates count from it, not from the newest batch.
+const forecastOf = (row, h) => (row[`${h}_label`] ? { label: row[`${h}_label`], confidence: row[`${h}_confidence`],
+  probabilities: { up: number(row[`${h}_up`]), hold: number(row[`${h}_hold`]), down: number(row[`${h}_down`]) },
+  dataDate: row[`${h}_date`], stale: Boolean(row[`${h}_stale`]) } : null);
+
+const symbolSelect = `WITH ${LATEST_BATCH}
   SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL}, latest.id AS batch_id,
-    f2.label AS t2_label, f2.probability_up AS t2_up, f2.probability_hold AS t2_hold, f2.probability_down AS t2_down, f2.confidence AS t2_confidence,
-    f5.label AS t5_label, f5.probability_up AS t5_up, f5.probability_hold AS t5_hold, f5.probability_down AS t5_down, f5.confidence AS t5_confidence,
+    ${FORECAST_COLS},
     price.close_price, price.price_date, price.price_source, price.change_percent, price.average_turnover_20d
   FROM symbols s CROSS JOIN latest
   -- Display-only symbols have no forecasts, so these joins are optional.
-  LEFT JOIN forecasts f2 ON f2.symbol = s.symbol AND f2.batch_id = latest.id AND f2.horizon = 't2'
-  LEFT JOIN forecasts f5 ON f5.symbol = s.symbol AND f5.batch_id = latest.id AND f5.horizon = 't5'
+  ${FORECAST_JOINS}
   LEFT JOIN LATERAL (
     SELECT p.close AS close_price, p.trade_date::text AS price_date, p.source AS price_source,
       CASE WHEN previous.close IS NULL OR previous.close = 0 THEN 0
@@ -315,10 +353,8 @@ function mapSymbol(row) {
     changePercent: number(row.change_percent) ?? 0,
     averageTurnover20d: number(row.average_turnover_20d) ?? 0,
     dataStatus: 'complete',
-    forecasts: !row.analysis_enabled || !row.t2_label ? null : {
-      t2: { label: row.t2_label, probabilities: { up: number(row.t2_up), hold: number(row.t2_hold), down: number(row.t2_down) }, confidence: row.t2_confidence },
-      t5: { label: row.t5_label, probabilities: { up: number(row.t5_up), hold: number(row.t5_hold), down: number(row.t5_down) }, confidence: row.t5_confidence },
-    },
+    forecasts: !row.analysis_enabled || (!row.t2_label && !row.t5_label) ? null
+      : { t2: forecastOf(row, 't2'), t5: forecastOf(row, 't5') },
   };
 }
 

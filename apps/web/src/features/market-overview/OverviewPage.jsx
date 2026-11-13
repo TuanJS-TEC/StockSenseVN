@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
-import { DEMO_FORECAST_NOTE } from '@stocksense/core/disclaimer';
+import { forecastStateNote } from '@stocksense/core/disclaimer';
 import { NOT_ANALYSED, SYMBOL_GROUPS, inGroup, openSymbol } from '../../app/symbolAccess.js';
 import { Disclaimer, Icon } from '../../app/icons.jsx';
 import { Confidence, MiniLab } from '../../components/forecast.jsx';
@@ -83,7 +83,7 @@ export function OverviewPage() {
 
   return <main className="content">
     <div className="pagehead"><div><h1>Tổng quan thị trường</h1><p>{canReadSymbols ? `${items.length} mã theo dõi; dự báo xu hướng T+2 và T+5 cho ${analysed} mã, tính lại mỗi ngày sau phiên.` : 'Dự báo xu hướng T+2 và T+5, tính lại mỗi ngày sau phiên.'}</p></div>
-      {data.status.state === 'demo' && <span className="chip info">{DEMO_FORECAST_NOTE}</span>}</div>
+      {forecastStateNote(data.status.state) && <span className="chip info">{forecastStateNote(data.status.state)}</span>}</div>
     <section className="strip">
       {['VNINDEX', 'HNX'].map((code) => { const item = index(code); return <div key={code}><div className="k">{item?.label ?? code}</div><div className="v num">{item ? number.format(item.value) : '—'}</div>
         {item && <div className={`small num ${changeClass(item.changePoints)}`}><Icon name={item.changePoints >= 0 ? 'index-up' : 'index-down'} /> {item.changePoints > 0 ? '+' : ''}{number.format(item.changePoints)} ({formatChange(item.changePercent)})</div>}

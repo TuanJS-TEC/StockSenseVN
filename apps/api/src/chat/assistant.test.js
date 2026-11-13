@@ -160,3 +160,17 @@ describe('chat trap questions are refused or answered with NO_DATA', () => {
     expect(filterOutput({ content: 'RSI dưới 30, vùng quá bán theo quy ước', status: 'complete' }).status).toBe('complete');
   });
 });
+
+describe('chat forecast notes for experimental and stale forecasts', () => {
+  const stale = { label: 'hold', confidence: 'low', probabilities: { up: 0.25, hold: 0.5, down: 0.25 }, dataDate: '2026-11-11', stale: true };
+  const experimental = createChatAssistant({ ...deps, market: { ...market,
+    symbol: async (symbol) => ({ symbol, analysisEnabled: true, forecasts: { t2: stale, t5: stale } }),
+    status: async () => ({ state: 'experimental', dataDate: '2026-11-12', modelVersion: 'decision-v1-trend' }) } });
+
+  it('says the model is experimental and which forecasts are old', async () => {
+    const answer = await experimental.answer({ user: trader, question: 'Dự báo FPT' });
+    expect(answer.content).toMatch(/thử nghiệm/);
+    expect(answer.content).toMatch(/dự báo cũ ngày 11\/11\/2026/);
+    expect(answer.content).not.toMatch(/dữ liệu dự báo mẫu/);
+  });
+});

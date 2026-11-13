@@ -2,6 +2,7 @@
 // template answer with citations -> output filter. Every number in an answer comes from retrieved records.
 import { hasCapability } from '@stocksense/core/access';
 import { getForecastLabel } from '@stocksense/core/labels';
+import { EXPERIMENTAL_FORECAST_NOTE } from '@stocksense/core/disclaimer';
 import { buildBoardQuote } from '@stocksense/core/price-board';
 import { changeOver, sma, rsi, macd } from '@stocksense/core/indicators';
 
@@ -198,9 +199,10 @@ export function createChatAssistant(deps) {
       const p = f.probabilities ?? {};
       const share = (key) => `${Math.round((p[key] ?? 0) * 100)}%`;
       const conf = { low: 'thấp', mid: 'trung bình', high: 'cao' }[f.confidence] ?? 'chưa có';
-      return `${name}: ${getForecastLabel(f.label).text} (Tăng ${share('up')}, Đi ngang ${share('hold')}, Giảm ${share('down')}; độ tin cậy ${conf})`;
+      return `${name}: ${getForecastLabel(f.label).text} (Tăng ${share('up')}, Đi ngang ${share('hold')}, Giảm ${share('down')}; độ tin cậy ${conf}${f.stale ? `; dự báo cũ ngày ${day(f.dataDate)}` : ''})`;
     };
-    const demo = status?.state === 'demo' ? ' Lưu ý: đây là dữ liệu dự báo mẫu vì mô hình chưa được triển khai.' : '';
+    const demo = status?.state === 'demo' ? ' Lưu ý: đây là dữ liệu dự báo mẫu vì mô hình chưa được triển khai.'
+      : status?.state === 'experimental' ? ` Lưu ý: ${EXPERIMENTAL_FORECAST_NOTE}.` : '';
     const content = `Dự báo xu hướng của ${symbol} với ngày dữ liệu ${day(status?.dataDate)}: ${describe('T+2', t2)}; ${describe('T+5', t5)}.${demo} Dự báo chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.`;
     return result('forecast', content, [{ type: 'forecast', label: `Dự báo ${symbol} ngày ${day(status?.dataDate)}${status?.modelVersion ? ` · mô hình ${status.modelVersion}` : ''}`, date: status?.dataDate, path: `/symbols/${symbol}` }]);
   }

@@ -419,3 +419,20 @@ a.brand { text-decoration: none; color: inherit; }
 .plegend .ic { width: 12px; height: 12px; stroke-width: 2.6; }
 .toast .ic { width: 15px; height: 15px; }
 .btn .ic { margin-right: 2px; }
+
+/* NLP news rows: compact head, click to open the model's detail panel. */
+.news article.nlp-item { display: block; padding: 0; }
+.nlp-head { padding: 12px 0; cursor: pointer; }
+.nlp-head h4 { margin: 0; }
+.nlp-title { all: unset; cursor: pointer; font-weight: 600; }
+.nlp-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nlp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.nlp-panel { padding: 0 0 12px; display: grid; gap: 8px; }
+.prob-bar { display: flex; height: 8px; overflow: hidden; border-radius: 20px; background: var(--surface-2); }
+.prob-bar i { display: block; height: 100%; }
+.prob-bar .up, .nlp-probs .dot.up { background: var(--up); }
+.prob-bar .hold, .nlp-probs .dot.hold { background: var(--hold); }
+.prob-bar .down, .nlp-probs .dot.down { background: var(--down); }
+.nlp-probs { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.nlp-probs .dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
+.nlp-passage { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.5; }
