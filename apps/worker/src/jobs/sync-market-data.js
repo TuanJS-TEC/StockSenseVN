@@ -3,7 +3,8 @@ import { createPriceCrossingAlerts, createTradePlanAlerts, expireTradePlans, pru
 const LOCK_KEY = 'stocksense:daily-prices:ssi:v1';
 const MARKET_INDICES = ['VNINDEX', 'HNXINDEX', 'VN30'];
 
-export async function syncMarketData({ pool, provider, startDate, endDate, logger = console }) {
+// symbols: optional subset of the enabled symbols; indices are only synced on a full run.
+export async function syncMarketData({ pool, provider, startDate, endDate, symbols: only = null, logger = console }) {
   const client = await pool.connect();
   let lock;
   try {
@@ -30,7 +31,8 @@ export async function syncMarketData({ pool, provider, startDate, endDate, logge
     await client.query(`UPDATE data_ingestion_runs SET status='failed', completed_at=now(),
       error_message=coalesce(error_message, 'Lần chạy bị ngắt giữa chừng trước khi hoàn tất.')
       WHERE dataset=$1 AND status='running'`, ['daily_prices']);
-    const symbols = await client.query('SELECT symbol FROM symbols WHERE is_enabled = true ORDER BY symbol');
+    const symbols = await client.query(`SELECT symbol FROM symbols WHERE is_enabled = true
+      AND ($1::text[] IS NULL OR symbol = ANY($1)) ORDER BY symbol`, [only]);
     symbolsTotal = symbols.rowCount;
     const run = await client.query(`INSERT INTO data_ingestion_runs
       (source, dataset, status, range_start, range_end, symbols_total)
@@ -56,7 +58,7 @@ export async function syncMarketData({ pool, provider, startDate, endDate, logge
     }
 
     // FR-M1-06: market indices for the overview strip; an index failure only makes the run partial.
-    if (provider.fetchIndexHistory) {
+    if (provider.fetchIndexHistory && !only) {
       for (const code of MARKET_INDICES) {
         try {
           const records = await provider.fetchIndexHistory(code, startDate, endDate);

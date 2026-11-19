@@ -1651,6 +1651,7 @@ components:
             sentiment24h: { type: [number, 'null'], description: 'Mean sentiment of the last 24 hours, -1..1; null without news in 24h' }
             riskFlags: { type: array, items: { type: string } }
         dataDate: { type: string, format: date }
+        baseClose: { type: [number, 'null'], description: 'Close of dataDate (VND) that lowPct/highPct apply to; null until the price sync has stored that session, so clients show the band in % only' }
         stale: { type: boolean, description: 'true when the forecast is older than the newest batch' }
         label: { type: 'null' }
         probabilities: { type: 'null' }

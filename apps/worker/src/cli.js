@@ -18,6 +18,7 @@ try {
     provider: createSsiProvider({ timeoutMs: config.timeoutMs }),
     startDate: config.startDate,
     endDate: config.endDate,
+    symbols: config.symbols,
   });
   console.info('[StockSense worker] run result:', result);
   if (result.status === 'partial') process.exitCode = 2;

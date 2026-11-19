@@ -4,9 +4,9 @@ export function getConfig(env = process.env, args = process.argv.slice(2)) {
   const options = new Map();
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
-    if (!['--from', '--to'].includes(key)) throw new Error(`Unknown option: ${key}`);
+    if (!['--from', '--to', '--symbols'].includes(key)) throw new Error(`Unknown option: ${key}`);
     const value = args[index + 1];
-    if (!value || value.startsWith('--')) throw new Error(`Expected a date after ${key}.`);
+    if (!value || value.startsWith('--')) throw new Error(`Expected a value after ${key}.`);
     options.set(key, value);
     index += 1;
   }
@@ -21,6 +21,9 @@ export function getConfig(env = process.env, args = process.argv.slice(2)) {
   if (!isDate(startDate) || !isDate(endDate) || startDate > endDate) {
     throw new Error('Use valid --from and --to dates in YYYY-MM-DD format, with --from <= --to.');
   }
+  // --symbols FPT,VNM limits the run to those enabled symbols (catch-up of a few lagging or new symbols).
+  const symbols = options.has('--symbols') ? options.get('--symbols').split(',').map((code) => code.trim().toUpperCase()) : null;
+  if (symbols && !symbols.every((code) => /^[A-Z0-9.-]{1,12}$/.test(code))) throw new Error('--symbols expects a comma-separated list of codes.');
 
   return {
     databaseUrl: env.DATABASE_URL,
@@ -28,6 +31,7 @@ export function getConfig(env = process.env, args = process.argv.slice(2)) {
     timeoutMs: Number(env.SSI_TIMEOUT_MS || 20_000),
     startDate,
     endDate,
+    symbols,
   };
 }
 

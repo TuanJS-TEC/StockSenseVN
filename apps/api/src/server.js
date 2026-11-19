@@ -29,6 +29,7 @@ import { createFixtureMarketRepository, createPostgresMarketRepository, PRICE_RA
 import { parseRange } from './market/nlp-news.js';
 import { createNewsHub, startNewsListener } from './market/news-hub.js';
 import { startLiveBoard } from './market/live-board.js';
+import { startPriceCatchup } from './market/price-catchup.js';
 import { createPdfReport, formatReportValue } from './reports/pdf.js';
 
 if (process.env.NODE_ENV === 'production') {
@@ -986,7 +987,9 @@ app.setNotFoundHandler((request, reply) => fail(reply, request, 404, 'NOT_FOUND'
 
 const newsHub = createNewsHub();
 const newsListener = databaseEnabled ? startNewsListener(pool, newsHub) : null;
-app.addHook('onClose', async () => { liveBoard?.stop(); await newsListener?.stop(); if (pool) await pool.end(); });
+// Fills missing end-of-day sessions so forecast bands can anchor on their own session's close. PRICE_CATCHUP=off disables.
+const priceCatchup = databaseEnabled && process.env.PRICE_CATCHUP !== 'off' ? startPriceCatchup(pool, { logger: app.log }) : null;
+app.addHook('onClose', async () => { priceCatchup?.stop(); liveBoard?.stop(); await newsListener?.stop(); if (pool) await pool.end(); });
 const port = Number(process.env.API_PORT || 3000);
 if (pool) await pool.query('SELECT 1');
 await app.listen({ port, host: process.env.API_HOST || '127.0.0.1' });

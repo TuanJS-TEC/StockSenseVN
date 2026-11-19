@@ -309,9 +309,12 @@ const LATEST_BATCH = 'latest AS (SELECT id, data_date, model_version FROM market
 // forecast of the same model version from the last 7 days, tagged stale, instead of showing nothing.
 // Since migration 025 a forecast is the model's 80% price range and volatility level (forecast_ranges), not an
 // up/hold/down label: the old fields stay in the response as null so older clients (mobile, PDF) read "no forecast".
+// The band is a return on the close of the forecast's own session, so that close travels with it as base_close; it is
+// null while the price sync has not stored that session yet (clients then show the band in % only, never on another close).
 const forecastJoin = (h) => `LEFT JOIN LATERAL (
     SELECT r.risk_level, r.low_pct, r.high_pct, r.coverage, r.has_news, r.sentiment_24h, r.risk_flags,
-      b.data_date::text AS data_date, b.data_date < latest.data_date AS stale
+      b.data_date::text AS data_date, b.data_date < latest.data_date AS stale,
+      (SELECT p.close FROM daily_prices p WHERE p.symbol = r.symbol AND p.trade_date = b.data_date) AS base_close
     FROM forecast_ranges r JOIN market_batches b ON b.id = r.batch_id
     WHERE r.symbol = s.symbol AND r.horizon = '${h}' AND b.model_version = latest.model_version
       AND b.data_date BETWEEN latest.data_date - 7 AND latest.data_date
@@ -321,12 +324,13 @@ const FORECAST_JOINS = `${forecastJoin('t2')}\n  ${forecastJoin('t5')}`;
 const FORECAST_COLS = ['t2', 't5'].map((h) => { const f = `f${h.slice(1)}`;
   return `${f}.risk_level AS ${h}_level, ${f}.low_pct AS ${h}_low, ${f}.high_pct AS ${h}_high, ${f}.coverage AS ${h}_coverage, `
     + `${f}.has_news AS ${h}_has_news, ${f}.sentiment_24h AS ${h}_sentiment, ${f}.risk_flags AS ${h}_flags, `
-    + `${f}.data_date AS ${h}_date, ${f}.stale AS ${h}_stale`; }).join(',\n    ');
+    + `${f}.data_date AS ${h}_date, ${f}.stale AS ${h}_stale, ${f}.base_close AS ${h}_base_close`; }).join(',\n    ');
 // dataDate is the session the forecast was made on; due dates count from it, not from the newest batch.
 export const forecastOf = (row, h) => (row[`${h}_level`] ? { riskLevel: row[`${h}_level`],
   range: { lowPct: number(row[`${h}_low`]), highPct: number(row[`${h}_high`]), coverage: number(row[`${h}_coverage`]) },
   news: { hasNews: Boolean(row[`${h}_has_news`]), sentiment24h: number(row[`${h}_sentiment`]), riskFlags: row[`${h}_flags`] ?? [] },
-  dataDate: row[`${h}_date`], stale: Boolean(row[`${h}_stale`]), label: null, probabilities: null, confidence: null } : null);
+  dataDate: row[`${h}_date`], baseClose: number(row[`${h}_base_close`]), stale: Boolean(row[`${h}_stale`]),
+  label: null, probabilities: null, confidence: null } : null);
 
 const symbolSelect = `WITH ${LATEST_BATCH}
   SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL}, latest.id AS batch_id,

@@ -12,7 +12,7 @@
   "scripts": {
     "dev:web": "npm --workspace @stocksense/web run dev",
     "dev:api": "npm --workspace @stocksense/api run dev",
-    "worker:market:sync": "npm --workspace @stocksense/worker run market:sync",
+    "worker:market:sync": "npm --workspace @stocksense/worker run market:sync --",
     "worker:news:sync": "npm --workspace @stocksense/worker run news:sync",
     "worker:notifications:deliver": "npm --workspace @stocksense/worker run notifications:deliver",
     "worker:admin-jobs:run": "npm --workspace @stocksense/worker run admin-jobs:run",

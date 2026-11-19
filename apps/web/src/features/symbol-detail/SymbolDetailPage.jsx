@@ -99,7 +99,7 @@ export function SymbolDetailPage({ symbol }) {
   const { detail, prices, status } = data;
   const quote = stats.quote;
   const t2 = detail.forecasts?.t2; const t5 = detail.forecasts?.t5;
-  const fcPrice = { close: quote.close ?? detail.closePrice, changePercent: quote.changePercent ?? detail.changePercent };
+  const fcPrice = { changePercent: quote.changePercent ?? detail.changePercent };
   const newsItem = (item) => <NlpNewsItem key={item.id} item={item} symbol={symbol} open={openNews.has(item.id)} onToggle={() => toggleNews(item.id)} />;
   const priceSource = prices.sourceStatus === 'live' ? 'giá SSI' : 'giá minh họa';
   const closeTone = quote.tones.close;
