@@ -174,6 +174,20 @@ export const mockApi = {
     async status() { await delay(); return structuredClone(marketMock.status); },
     async summary() { await delay(); return structuredClone(marketMock.summary); },
     async symbols() { await delay(); return structuredClone(marketMock.symbols); },
+    // Demo electronic board: fixture closes only, no order book or intraday feed.
+    async live() {
+      await delay();
+      const rows = marketMock.symbols.items.map((item) => {
+        const reference = Math.round(item.closePrice / (1 + item.changePercent / 100));
+        const quote = buildBoardQuote(item.exchange, { close: item.closePrice }, { close: reference });
+        return { symbol: item.symbol, exchange: item.exchange, name: item.name, date: marketMock.status.dataDate, session: null,
+          reference: quote.reference, ceiling: quote.ceiling, floor: quote.floor, bids: [], asks: [],
+          price: item.closePrice, matchedVolume: null, change: quote.change, changePercent: quote.changePercent,
+          volume: null, value: null, avg: null, open: null, high: null, low: null, foreignBuy: null, foreignSell: null, foreignRoom: null };
+      });
+      return { updatedAt: null, indices: [], rows, vn30: rows.filter((row) => marketMock.symbols.items.find((item) => item.symbol === row.symbol).indices.includes('VN30')).map((row) => row.symbol) };
+    },
+    liveStream() { return () => {}; },
     async board() {
       await delay();
       const items = marketMock.symbols.items.map((item) => {

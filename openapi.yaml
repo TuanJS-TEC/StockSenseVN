@@ -1304,10 +1304,10 @@ paths:
   /market/board:
     get:
       tags: [Market]
-      summary: End-of-day price board of the 30 tracked symbols
+      summary: Price board of the 30 tracked symbols (end-of-day, intraday during the session)
       x-required-capability: symbols.read
       security: [{ SessionCookie: [] }, { BearerAuth: [] }]
-      description: Latest session from SSI with reference, ceiling and floor prices. Display-only symbols have forecasts null.
+      description: Latest session from SSI with reference, ceiling and floor prices. During trading hours, rows whose database session is older than today are overlaid with SSI iBoard intraday quotes (priceDataStatus intraday) and `live` is set. Display-only symbols have forecasts null.
       responses:
         '200':
           description: Board rows
@@ -1322,6 +1322,91 @@ paths:
                     properties:
                       date: { type: [string, 'null'], format: date }
                       items: { type: array, items: { $ref: '#/components/schemas/BoardRow' } }
+                      live:
+                        type: object
+                        description: Present only while intraday quotes are merged in.
+                        properties: { source: { type: string, enum: [ssi] }, updatedAt: { type: string, format: date-time } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /market/live:
+    get:
+      tags: [Market]
+      summary: Electronic price board snapshot of every listed stock (HOSE, HNX, UPCoM)
+      x-required-capability: symbols.read
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Polled from SSI iBoard every 3 s in trading hours (5 min otherwise). Prices in VND, volumes in shares; bids/asks are 3 levels of [price, volume]. Index cards carry today's 1-minute line from DNSE. Empty until the first poll completes.
+      responses:
+        '200':
+          description: Board snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [updatedAt, vn30, indices, rows]
+                    properties:
+                      updatedAt: { type: [string, 'null'], format: date-time }
+                      vn30: { type: array, items: { type: string } }
+                      indices:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code: { type: string, enum: [VNINDEX, VN30, HNXIndex, HNXUpcomIndex] }
+                            label: { type: string }
+                            value: { type: number }
+                            previous: { type: number }
+                            change: { type: number }
+                            changePercent: { type: number }
+                            volume: { type: number }
+                            turnover: { type: number }
+                            advances: { type: integer }
+                            nochanges: { type: integer }
+                            declines: { type: integer }
+                            ceilings: { type: integer }
+                            floors: { type: integer }
+                            chart: { type: object, properties: { t: { type: array, items: { type: integer } }, c: { type: array, items: { type: number } } } }
+                      rows:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            symbol: { type: string }
+                            exchange: { type: string, enum: [HOSE, HNX, UPCOM] }
+                            name: { type: string }
+                            date: { type: [string, 'null'], format: date }
+                            session: { type: [string, 'null'], description: 'SSI session code, e.g. ATO, LO, ATC' }
+                            reference: { type: [number, 'null'] }
+                            ceiling: { type: [number, 'null'] }
+                            floor: { type: [number, 'null'] }
+                            bids: { type: array, items: { type: array, items: { type: [number, 'null'] } } }
+                            asks: { type: array, items: { type: array, items: { type: [number, 'null'] } } }
+                            price: { type: [number, 'null'] }
+                            matchedVolume: { type: [number, 'null'] }
+                            change: { type: [number, 'null'] }
+                            changePercent: { type: [number, 'null'] }
+                            volume: { type: [number, 'null'] }
+                            value: { type: [number, 'null'] }
+                            avg: { type: [number, 'null'] }
+                            open: { type: [number, 'null'] }
+                            high: { type: [number, 'null'] }
+                            low: { type: [number, 'null'] }
+                            foreignBuy: { type: [number, 'null'] }
+                            foreignSell: { type: [number, 'null'] }
+                            foreignRoom: { type: [number, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /market/live/stream:
+    get:
+      tags: [Market]
+      summary: Server-Sent Events with electronic board updates
+      x-required-capability: symbols.read
+      security: [{ SessionCookie: [] }, { BearerAuth: [] }]
+      description: Emits `event board` with `{ updatedAt, rows, indices? }` after each poll, where rows are only the /market/live rows that changed and indices is present when any index card changed. Missed events are not replayed; refetch /market/live after a reconnect.
+      responses:
+        '200': { description: Event stream, content: { text/event-stream: { schema: { type: string } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 components:
@@ -1544,17 +1629,32 @@ components:
         must_change_password: { type: boolean }
     Forecast:
       type: object
-      required: [label, probabilities, confidence]
+      description: >-
+        Since migration 025 a forecast is the model's volatility level and 80% price range for the horizon (how far the
+        price may move, not which way). label, probabilities and confidence are kept for older clients and are null.
+      required: [riskLevel, range, news, dataDate, stale, label, probabilities, confidence]
       properties:
-        label: { type: string, enum: [up, hold, down] }
-        probabilities:
+        riskLevel: { type: string, enum: [low, normal, high], description: "Forecast move size against the symbol's own last 250 sessions" }
+        range:
           type: object
-          required: [up, hold, down]
+          required: [lowPct, highPct, coverage]
           properties:
-            up: { type: number, minimum: 0, maximum: 1 }
-            hold: { type: number, minimum: 0, maximum: 1 }
-            down: { type: number, minimum: 0, maximum: 1 }
-        confidence: { type: string, enum: [low, mid, high] }
+            lowPct: { type: number, exclusiveMaximum: 0, description: 'Lower bound as a return on the close of dataDate' }
+            highPct: { type: number, exclusiveMinimum: 0, description: 'Upper bound as a return on the close of dataDate' }
+            coverage: { type: number, description: 'Share of outcomes the band is meant to hold (0.8)' }
+        news:
+          type: object
+          description: News snapshot of the forecast session; context only, not an input of the band
+          required: [hasNews, sentiment24h, riskFlags]
+          properties:
+            hasNews: { type: boolean, description: 'Any news in the last 72 hours' }
+            sentiment24h: { type: [number, 'null'], description: 'Mean sentiment of the last 24 hours, -1..1; null without news in 24h' }
+            riskFlags: { type: array, items: { type: string } }
+        dataDate: { type: string, format: date }
+        stale: { type: boolean, description: 'true when the forecast is older than the newest batch' }
+        label: { type: 'null' }
+        probabilities: { type: 'null' }
+        confidence: { type: 'null' }
     Symbol:
       type: object
       required: [symbol, name, exchange, indices, analysisEnabled, closePrice, changePercent, averageTurnover20d, dataStatus, forecasts]
@@ -1601,6 +1701,7 @@ components:
         indices: { type: array, items: { type: object, required: [code, label, value, changePoints, changePercent], properties: { code: { type: string }, label: { type: string }, value: { type: number }, changePoints: { type: number }, changePercent: { type: number } } } }
         breadth: { type: object, required: [advances, nochanges, declines], properties: { advances: { type: integer }, nochanges: { type: integer }, declines: { type: integer } } }
         labelDistribution: { type: object, required: [up, hold, down], properties: { up: { type: integer }, hold: { type: integer }, down: { type: integer } } }
+        volatilityLevels: { type: [object, 'null'], description: 'Symbols per T+5 volatility level in the newest batch', required: [low, normal, high], properties: { low: { type: integer }, normal: { type: integer }, high: { type: integer } } }
     PriceSeries:
       type: object
       required: [symbol, currency, interval, sourceStatus, latestDate, items]

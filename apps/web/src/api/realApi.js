@@ -31,6 +31,23 @@ export const realApi = {
     status: () => request('/market/status'),
     summary: () => request('/market/summary'),
     board: () => request('/market/board'),
+    // Electronic board: every listed stock with bid/ask depth, plus index cards ({ updatedAt, vn30, indices, rows }).
+    live: () => request('/market/live'),
+    // Server-sent events: `board` carries { updatedAt, rows (changed only), indices? }. `open` also fires on
+    // reconnects (missed events are lost), so onOpen should refetch the snapshot. Closed while the tab is hidden.
+    liveStream(onUpdate, onOpen) {
+      let source = null;
+      const sync = () => {
+        if (document.visibilityState === 'hidden') { source?.close(); source = null; return; }
+        if (source) return;
+        source = new EventSource(`${API_BASE_URL}/api/v1/market/live/stream`, { withCredentials: true });
+        source.addEventListener('open', onOpen);
+        source.addEventListener('board', (event) => onUpdate(JSON.parse(event.data)));
+      };
+      document.addEventListener('visibilitychange', sync);
+      sync();
+      return () => { document.removeEventListener('visibilitychange', sync); source?.close(); source = null; };
+    },
     symbols: () => request('/symbols'),
     industries: () => request('/industries'),
   },

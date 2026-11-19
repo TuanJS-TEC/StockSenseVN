@@ -142,7 +142,7 @@ export function createPostgresMarketRepository(pool) {
       const [indexResult, summaryResult, board] = await Promise.all([
         pool.query(`SELECT DISTINCT ON (code) code, trade_date::text AS date, close, change_points, change_percent
           FROM market_index_daily ORDER BY code, trade_date DESC`),
-        batch ? pool.query(`SELECT advances, nochanges, declines, labels_up, labels_hold, labels_down FROM market_summary WHERE batch_id = $1`, [batch.id]) : { rows: [] },
+        batch ? pool.query(`SELECT advances, nochanges, declines, labels_up, labels_hold, labels_down, vol_low, vol_normal, vol_high FROM market_summary WHERE batch_id = $1`, [batch.id]) : { rows: [] },
         this.board(),
       ]);
       const summary = summaryResult.rows[0];
@@ -165,6 +165,7 @@ export function createPostgresMarketRepository(pool) {
         indices,
         breadth,
         labelDistribution: summary ? { up: summary.labels_up, hold: summary.labels_hold, down: summary.labels_down } : null,
+        volatilityLevels: summary ? { low: summary.vol_low, normal: summary.vol_normal, high: summary.vol_high } : null,
       };
     },
     async symbols({ q = '', exchange = '' } = {}) {
@@ -306,22 +307,26 @@ export function createPostgresMarketRepository(pool) {
 const LATEST_BATCH = 'latest AS (SELECT id, data_date, model_version FROM market_batches ORDER BY data_date DESC, id DESC LIMIT 1)';
 // SDD AC-06/28: a symbol missing from the newest batch (its price sync failed, or the model skipped it) keeps its newest
 // forecast of the same model version from the last 7 days, tagged stale, instead of showing nothing.
+// Since migration 025 a forecast is the model's 80% price range and volatility level (forecast_ranges), not an
+// up/hold/down label: the old fields stay in the response as null so older clients (mobile, PDF) read "no forecast".
 const forecastJoin = (h) => `LEFT JOIN LATERAL (
-    SELECT f.label, f.probability_up, f.probability_hold, f.probability_down, f.confidence,
+    SELECT r.risk_level, r.low_pct, r.high_pct, r.coverage, r.has_news, r.sentiment_24h, r.risk_flags,
       b.data_date::text AS data_date, b.data_date < latest.data_date AS stale
-    FROM forecasts f JOIN market_batches b ON b.id = f.batch_id
-    WHERE f.symbol = s.symbol AND f.horizon = '${h}' AND b.model_version = latest.model_version
+    FROM forecast_ranges r JOIN market_batches b ON b.id = r.batch_id
+    WHERE r.symbol = s.symbol AND r.horizon = '${h}' AND b.model_version = latest.model_version
       AND b.data_date BETWEEN latest.data_date - 7 AND latest.data_date
     ORDER BY b.data_date DESC, b.id DESC LIMIT 1
   ) f${h.slice(1)} ON true`;
 const FORECAST_JOINS = `${forecastJoin('t2')}\n  ${forecastJoin('t5')}`;
 const FORECAST_COLS = ['t2', 't5'].map((h) => { const f = `f${h.slice(1)}`;
-  return `${f}.label AS ${h}_label, ${f}.probability_up AS ${h}_up, ${f}.probability_hold AS ${h}_hold, ${f}.probability_down AS ${h}_down, `
-    + `${f}.confidence AS ${h}_confidence, ${f}.data_date AS ${h}_date, ${f}.stale AS ${h}_stale`; }).join(',\n    ');
+  return `${f}.risk_level AS ${h}_level, ${f}.low_pct AS ${h}_low, ${f}.high_pct AS ${h}_high, ${f}.coverage AS ${h}_coverage, `
+    + `${f}.has_news AS ${h}_has_news, ${f}.sentiment_24h AS ${h}_sentiment, ${f}.risk_flags AS ${h}_flags, `
+    + `${f}.data_date AS ${h}_date, ${f}.stale AS ${h}_stale`; }).join(',\n    ');
 // dataDate is the session the forecast was made on; due dates count from it, not from the newest batch.
-const forecastOf = (row, h) => (row[`${h}_label`] ? { label: row[`${h}_label`], confidence: row[`${h}_confidence`],
-  probabilities: { up: number(row[`${h}_up`]), hold: number(row[`${h}_hold`]), down: number(row[`${h}_down`]) },
-  dataDate: row[`${h}_date`], stale: Boolean(row[`${h}_stale`]) } : null);
+export const forecastOf = (row, h) => (row[`${h}_level`] ? { riskLevel: row[`${h}_level`],
+  range: { lowPct: number(row[`${h}_low`]), highPct: number(row[`${h}_high`]), coverage: number(row[`${h}_coverage`]) },
+  news: { hasNews: Boolean(row[`${h}_has_news`]), sentiment24h: number(row[`${h}_sentiment`]), riskFlags: row[`${h}_flags`] ?? [] },
+  dataDate: row[`${h}_date`], stale: Boolean(row[`${h}_stale`]), label: null, probabilities: null, confidence: null } : null);
 
 const symbolSelect = `WITH ${LATEST_BATCH}
   SELECT s.symbol, s.name, s.exchange, s.industry, s.analysis_enabled, ${INDICES_SQL}, latest.id AS batch_id,
@@ -353,7 +358,7 @@ function mapSymbol(row) {
     changePercent: number(row.change_percent) ?? 0,
     averageTurnover20d: number(row.average_turnover_20d) ?? 0,
     dataStatus: 'complete',
-    forecasts: !row.analysis_enabled || (!row.t2_label && !row.t5_label) ? null
+    forecasts: !row.analysis_enabled || (!row.t2_level && !row.t5_level) ? null
       : { t2: forecastOf(row, 't2'), t5: forecastOf(row, 't5') },
   };
 }

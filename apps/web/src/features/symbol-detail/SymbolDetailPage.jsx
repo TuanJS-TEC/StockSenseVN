@@ -11,6 +11,7 @@ import { EXPERIMENTAL_FORECAST_NOTE, forecastStateNote } from '@stocksense/core/
 import { defaultRange } from '@stocksense/core/news';
 import { Disclaimer, Icon } from '../../app/icons.jsx';
 import { ForecastCard } from '../../components/forecast.jsx';
+import { RANGE_CAPTION } from '@stocksense/core/labels';
 import { NlpNewsItem } from './NlpNewsItem.jsx';
 import { useNlpNews } from './useNlpNews.js';
 
@@ -98,8 +99,7 @@ export function SymbolDetailPage({ symbol }) {
   const { detail, prices, status } = data;
   const quote = stats.quote;
   const t2 = detail.forecasts?.t2; const t5 = detail.forecasts?.t5;
-  const conflict = (t2?.label === 'up' && t5?.label === 'down') || (t2?.label === 'down' && t5?.label === 'up');
-  const labelText = { up: 'Tăng', hold: 'Đi ngang', down: 'Giảm' };
+  const fcPrice = { close: quote.close ?? detail.closePrice, changePercent: quote.changePercent ?? detail.changePercent };
   const newsItem = (item) => <NlpNewsItem key={item.id} item={item} symbol={symbol} open={openNews.has(item.id)} onToggle={() => toggleNews(item.id)} />;
   const priceSource = prices.sourceStatus === 'live' ? 'giá SSI' : 'giá minh họa';
   const closeTone = quote.tones.close;
@@ -158,20 +158,19 @@ export function SymbolDetailPage({ symbol }) {
       </section>
       <section className="card chart"><div className="card-h"><h2>Biểu đồ giá</h2><span className="small muted">{prices.items.length} phiên · đến {formatDate(prices.latestDate)} · giá điều chỉnh</span></div>
         <CandleChart bars={chartBars} newsDays={newsDays} /></section>
-      <section className="card quote-forecast"><div className="card-h"><h2>Dự báo xu hướng</h2></div>
-        {conflict && <div className="note warn small"><b>Mâu thuẫn kỳ hạn:</b> T+2 {labelText[t2.label]}, T+5 {labelText[t5.label]}.</div>}
-        <ForecastCard horizon="t2" forecast={t2} dueDate={addTradingDays(t2?.dataDate ?? status?.dataDate, 2, status?.holidays)} />
-        <ForecastCard horizon="t5" forecast={t5} dueDate={addTradingDays(t5?.dataDate ?? status?.dataDate, 5, status?.holidays)} />
+      <section className="card quote-forecast"><div className="card-h"><h2>Dự báo biến động</h2></div>
+        <ForecastCard horizon="t2" forecast={t2} dueDate={addTradingDays(t2?.dataDate ?? status?.dataDate, 2, status?.holidays)} {...fcPrice} />
+        <ForecastCard horizon="t5" forecast={t5} dueDate={addTradingDays(t5?.dataDate ?? status?.dataDate, 5, status?.holidays)} {...fcPrice} />
         {forecastStateNote(status?.state) && <div className="small muted">{forecastStateNote(status?.state)}.</div>}
+        <div className="small muted">{RANGE_CAPTION}</div>
         <Disclaimer />
       </section>
     </div>}
 
     {tab === 'fc' && <>
-      {conflict && <div className="note warn"><b>Mâu thuẫn kỳ hạn.</b> T+2 dự báo {labelText[t2.label]}, T+5 dự báo {labelText[t5.label]}. Nên đọc cả hai thẻ trước khi quyết định.</div>}
-      {status?.state === 'experimental' && <div className="note warn"><b>{EXPERIMENTAL_FORECAST_NOTE}.</b> Nhãn Đi ngang dựa trên mô hình biên độ; nhãn Tăng/Giảm chỉ mang tính tham khảo.</div>}
+      {status?.state === 'experimental' && <div className="note warn"><b>{EXPERIMENTAL_FORECAST_NOTE}.</b> {RANGE_CAPTION}</div>}
       {status?.state === 'demo' && <div className="note info">Dự báo hiển thị là <b>dữ liệu mẫu</b> trong khi mô hình AI chưa triển khai; giá thị trường {prices.sourceStatus === 'live' ? 'lấy từ SSI' : 'là dữ liệu minh họa'}.</div>}
-      <div className="fcs"><ForecastCard horizon="t2" forecast={t2} dueDate={addTradingDays(t2?.dataDate ?? status?.dataDate, 2, status?.holidays)} /><ForecastCard horizon="t5" forecast={t5} dueDate={addTradingDays(t5?.dataDate ?? status?.dataDate, 5, status?.holidays)} /></div>
+      <div className="fcs"><ForecastCard horizon="t2" forecast={t2} dueDate={addTradingDays(t2?.dataDate ?? status?.dataDate, 2, status?.holidays)} {...fcPrice} /><ForecastCard horizon="t5" forecast={t5} dueDate={addTradingDays(t5?.dataDate ?? status?.dataDate, 5, status?.holidays)} {...fcPrice} /></div>
       <div className="grid g2">
         <section className="card"><div className="card-h"><h2>Tin mới nhất</h2><button className="btn sm" type="button" onClick={() => setTab('news')}>Xem tất cả</button></div>
           <div className="news">{nlp.recent?.items.slice(0, 3).map(newsItem)}{!nlp.recent && <p className="muted">Đang tải tin…</p>}{nlp.recent && !nlp.recent.items.length && <p className="muted">Chưa có tin nào của mã {symbol} trong 7 ngày gần nhất.</p>}</div></section>
