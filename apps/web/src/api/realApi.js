@@ -1,4 +1,4 @@
-import { download, request } from './client.js';
+import { API_BASE_URL, download, request } from './client.js';
 
 const toQuery = (filters = {}) => new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '' && value != null).map(([key, value]) => [key, String(value)]));
 
@@ -31,6 +31,23 @@ export const realApi = {
     status: () => request('/market/status'),
     summary: () => request('/market/summary'),
     board: () => request('/market/board'),
+    // Electronic board: every listed stock with bid/ask depth, plus index cards ({ updatedAt, vn30, indices, rows }).
+    live: () => request('/market/live'),
+    // Server-sent events: `board` carries { updatedAt, rows (changed only), indices? }. `open` also fires on
+    // reconnects (missed events are lost), so onOpen should refetch the snapshot. Closed while the tab is hidden.
+    liveStream(onUpdate, onOpen) {
+      let source = null;
+      const sync = () => {
+        if (document.visibilityState === 'hidden') { source?.close(); source = null; return; }
+        if (source) return;
+        source = new EventSource(`${API_BASE_URL}/api/v1/market/live/stream`, { withCredentials: true });
+        source.addEventListener('open', onOpen);
+        source.addEventListener('board', (event) => onUpdate(JSON.parse(event.data)));
+      };
+      document.addEventListener('visibilitychange', sync);
+      sync();
+      return () => { document.removeEventListener('visibilitychange', sync); source?.close(); source = null; };
+    },
     symbols: () => request('/symbols'),
     industries: () => request('/industries'),
   },
@@ -86,7 +103,25 @@ export const realApi = {
   symbols: {
     detail: (symbol) => request(`/symbols/${encodeURIComponent(symbol)}`),
     prices: (symbol, range = '6m') => request(`/symbols/${encodeURIComponent(symbol)}/prices?range=${encodeURIComponent(range)}`),
-    news: (symbol) => request(`/symbols/${encodeURIComponent(symbol)}/news`),
+    nlpNews: (symbol, { from, to } = {}) => request(`/symbols/${encodeURIComponent(symbol)}/nlp-news${from && to ? `?from=${from}&to=${to}` : ''}`),
+    nlpNewsTimes: (symbol) => request(`/symbols/${encodeURIComponent(symbol)}/nlp-news/times`),
+    // Server-sent events: `news` fires when this symbol's news changed. `open` also fires on automatic reconnects,
+    // where events sent meanwhile are lost, so onUpdate runs on both. A non-2xx answer (expired session) ends the stream silently.
+    // The stream is closed while the tab is hidden (many symbol pages would exhaust the browser's per-host HTTP/1.1
+    // connection pool) and reopened when visible again; the `open` event then refetches what was missed.
+    newsStream(symbol, onUpdate) {
+      let source = null;
+      const sync = () => {
+        if (document.visibilityState === 'hidden') { source?.close(); source = null; return; }
+        if (source) return;
+        source = new EventSource(`${API_BASE_URL}/api/v1/symbols/${encodeURIComponent(symbol)}/nlp-news/stream`, { withCredentials: true });
+        source.addEventListener('open', onUpdate);
+        source.addEventListener('news', onUpdate);
+      };
+      document.addEventListener('visibilitychange', sync);
+      sync();
+      return () => { document.removeEventListener('visibilitychange', sync); source?.close(); source = null; };
+    },
     historyCsv: (symbol, range = '6m') => download(`/symbols/${encodeURIComponent(symbol)}/history.csv?range=${encodeURIComponent(range)}`, `stocksense-${symbol}-history.csv`, 'text/csv'),
   },
   watchlist: {

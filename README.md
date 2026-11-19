@@ -71,10 +71,12 @@ docker compose stop api
 npm run dev:api                    # API tại http://127.0.0.1:3000, dùng DATABASE_URL trong .env
 ```
 
-Nạp dữ liệu thật ngay (không cần chờ lịch):
+Giá ngày tự cập nhật: khi có DATABASE_URL, API kiểm tra 15 phút một lần (và ngay khi khởi động) xem mỗi mã đã có giá đến phiên đã đóng cửa gần nhất chưa (sau 15:30, bỏ qua cuối tuần và ngày nghỉ trong `market_holidays`). Thiếu thì API tự chạy đồng bộ SSI và lưu vào `daily_prices`: mã chưa có dữ liệu (DB trống, mã mới bật) nạp 5 năm lịch sử, mã bị chậm nạp đúng những phiên thiếu. Nhật ký chạy nằm trong log API và bảng `data_ingestion_runs`. Tắt bằng `PRICE_CATCHUP=off`.
+
+Nạp dữ liệu thật ngay bằng tay (không bắt buộc):
 
 ```sh
-npm run worker:market:sync         # giá OHLCV ngày từ SSI
+npm run worker:market:sync         # giá OHLCV ngày từ SSI; thêm -- --from YYYY-MM-DD --to YYYY-MM-DD --symbols FPT,VNM nếu cần
 npm run worker:news:sync           # tin CafeF (chuyên mục + trang tin theo mã), VnExpress; mặc định 7 ngày gần nhất
 npm run worker:notifications:deliver
 ```

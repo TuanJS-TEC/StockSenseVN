@@ -33,7 +33,7 @@ function DataStatus() {
   useEffect(() => { api.market.status().then(setStatus).catch(() => {}); }, []);
   if (!status) return <div className="datastat"><span className="dot" /><span>Đang tải trạng thái dữ liệu…</span></div>;
   const batchTime = status.batchCompletedAt ? new Date(status.batchCompletedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '—';
-  const forecastLabel = status.state === 'demo' ? 'dự báo mẫu' : 'dự báo';
+  const forecastLabel = { demo: 'dự báo mẫu', experimental: 'dự báo thử nghiệm' }[status.state] ?? 'dự báo';
   if (status.latestPriceDate) {
     return <div className="datastat"><span className="dot" /><span>Giá SSI đến <b className="num" style={{ color: 'var(--ink)' }}>{formatDate(status.latestPriceDate)}</b><span className="hide-sm"> · {forecastLabel} ngày {formatDate(status.dataDate)} · mô hình <span className="num">{status.modelVersion}</span></span></span></div>;
   }

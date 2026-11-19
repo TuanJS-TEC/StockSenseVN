@@ -2,16 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
-import { DEMO_FORECAST_NOTE } from '@stocksense/core/disclaimer';
+import { forecastStateNote } from '@stocksense/core/disclaimer';
 import { NOT_ANALYSED, SYMBOL_GROUPS, inGroup, openSymbol } from '../../app/symbolAccess.js';
 import { Disclaimer, Icon } from '../../app/icons.jsx';
-import { Confidence, MiniLab } from '../../components/forecast.jsx';
+import { MiniLab, rangeText } from '../../components/forecast.jsx';
 
 const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
 const money = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const LIQUIDITY_OPTIONS = [['', 'Mọi thanh khoản'], ['10000000000', 'GTGD ≥ 10 tỷ'], ['50000000000', 'GTGD ≥ 50 tỷ'], ['100000000000', 'GTGD ≥ 100 tỷ']];
 const SORTS = { symbol: (item) => item.symbol, closePrice: (item) => item.closePrice, changePercent: (item) => item.changePercent, averageTurnover20d: (item) => item.averageTurnover20d };
-const LABEL_TEXT = { up: 'Tăng', hold: 'Đi ngang', down: 'Giảm' };
+const LEVEL_TEXT = { low: 'Thấp', normal: 'Bình thường', high: 'Cao' };
 
 function formatChange(value) {
   return `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(2).replace('.', ',')}%`;
@@ -62,7 +62,7 @@ export function OverviewPage() {
     if (!data) return [];
     const filtered = data.symbols.items.filter((item) => inGroup(item, group)
       && (!industry || item.industry === industry)
-      && (!trend || item.forecasts?.t5?.label === trend)
+      && (!trend || item.forecasts?.t5?.riskLevel === trend)
       && (!minTurnover || item.averageTurnover20d >= Number(minTurnover)));
     const value = SORTS[sort.key];
     const factor = sort.direction === 'asc' ? 1 : -1;
@@ -75,23 +75,23 @@ export function OverviewPage() {
   if (!data) return null;
 
   const items = data.symbols.items;
-  const count = (label) => items.filter((item) => item.forecasts?.t5?.label === label).length;
+  const count = (level) => items.filter((item) => item.forecasts?.t5?.riskLevel === level).length;
   const index = (code) => data.summary.indices.find((item) => item.code === code);
   const breadth = data.summary.breadth;
   const groups = SYMBOL_GROUPS.filter(([value]) => items.some((item) => inGroup(item, value)));
   const analysed = items.filter((item) => item.analysisEnabled !== false).length;
 
   return <main className="content">
-    <div className="pagehead"><div><h1>Tổng quan thị trường</h1><p>{canReadSymbols ? `${items.length} mã theo dõi; dự báo xu hướng T+2 và T+5 cho ${analysed} mã, tính lại mỗi ngày sau phiên.` : 'Dự báo xu hướng T+2 và T+5, tính lại mỗi ngày sau phiên.'}</p></div>
-      {data.status.state === 'demo' && <span className="chip info">{DEMO_FORECAST_NOTE}</span>}</div>
+    <div className="pagehead"><div><h1>Tổng quan thị trường</h1><p>{canReadSymbols ? `${items.length} mã theo dõi; dự báo mức biến động và dải giá T+2, T+5 cho ${analysed} mã, tính lại mỗi ngày sau phiên.` : 'Dự báo mức biến động và dải giá T+2, T+5, tính lại mỗi ngày sau phiên.'}</p></div>
+      {forecastStateNote(data.status.state) && <span className="chip info">{forecastStateNote(data.status.state)}</span>}</div>
     <section className="strip">
       {['VNINDEX', 'HNX'].map((code) => { const item = index(code); return <div key={code}><div className="k">{item?.label ?? code}</div><div className="v num">{item ? number.format(item.value) : '—'}</div>
         {item && <div className={`small num ${changeClass(item.changePoints)}`}><Icon name={item.changePoints >= 0 ? 'index-up' : 'index-down'} /> {item.changePoints > 0 ? '+' : ''}{number.format(item.changePoints)} ({formatChange(item.changePercent)})</div>}
           {item && <div className="small muted">{item.source === 'ssi' ? `SSI · ${formatDay(item.date)}` : 'Dữ liệu mẫu'}</div>}</div>; })}
       <div><div className="k">Độ rộng {breadth.scope === 'tracked' ? `(${breadth.total} mã theo dõi)` : 'thị trường'}</div><div className="v num" style={{ fontSize: 16 }}><span className="c-up">{breadth.advances}</span> · <span className="c-hold">{breadth.nochanges}</span> · <span className="c-down">{breadth.declines}</span></div>
         <div className="breadth"><i className="bg-up" style={{ flex: breadth.advances }} /><i className="bg-hold" style={{ flex: breadth.nochanges }} /><i className="bg-down" style={{ flex: breadth.declines }} /></div></div>
-      <div><div className="k">Tỷ lệ nhãn T+5 ({analysed || '—'} mã)</div>{canReadSymbols ? <><div className="v num" style={{ fontSize: 16 }}><span className="c-up"><Icon name="up" /> {count('up')}</span> · <span className="c-hold"><Icon name="hold" /> {count('hold')}</span> · <span className="c-down"><Icon name="down" /> {count('down')}</span></div>
-        <div className="breadth"><i className="bg-up" style={{ flex: count('up') }} /><i className="bg-hold" style={{ flex: count('hold') }} /><i className="bg-down" style={{ flex: count('down') }} /></div></> : <div className="small muted">Không áp dụng cho vai trò này</div>}</div>
+      <div><div className="k">Mức biến động T+5 ({analysed || '—'} mã)</div>{canReadSymbols ? <><div className="v num" style={{ fontSize: 16 }}><span title="Thấp">◔ {count('low')}</span> · <span title="Bình thường">◑ {count('normal')}</span> · <span title="Cao">◕ {count('high')}</span></div>
+        <div className="small muted">thấp · bình thường · cao</div></> : <div className="small muted">Không áp dụng cho vai trò này</div>}</div>
     </section>
 
     {canReadSymbols ? <section className="card">
@@ -99,7 +99,7 @@ export function OverviewPage() {
         <div className="actions">
           <div className="seg" role="group" aria-label="Nhóm mã">{groups.map(([value, label]) => <button key={value} type="button" className={group === value ? 'on' : ''} onClick={() => setGroup(value)}>{label}</button>)}</div>
           <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Lọc theo ngành" value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="">Mọi ngành</option>{industries.map((item) => <option key={item}>{item}</option>)}</select></div>
-          <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Xu hướng T+5" value={trend} onChange={(event) => setTrend(event.target.value)}><option value="">Mọi xu hướng T+5</option>{Object.entries(LABEL_TEXT).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>
+          <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Mức biến động T+5" value={trend} onChange={(event) => setTrend(event.target.value)}><option value="">Mọi mức biến động T+5</option>{Object.entries(LEVEL_TEXT).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>
           <div className="field" style={{ flexDirection: 'row' }}><select aria-label="Lọc theo thanh khoản" value={minTurnover} onChange={(event) => setMinTurnover(event.target.value)}>{LIQUIDITY_OPTIONS.map(([value, text]) => <option key={text} value={value}>{text}</option>)}</select></div>
         </div></div>
       {watchError && <div className="note bad" role="alert">{watchError}</div>}
@@ -111,7 +111,7 @@ export function OverviewPage() {
           <SortHeader label="Giá" sortKey="closePrice" sort={sort} onSort={sortBy} align="r" />
           <SortHeader label="%" sortKey="changePercent" sort={sort} onSort={sortBy} align="r" />
           <SortHeader label="GTGD TB20 (tỷ)" sortKey="averageTurnover20d" sort={sort} onSort={sortBy} align="r hide-sm" />
-          <th>T+2</th><th>T+5</th><th className="hide-sm">Tin cậy T+5</th>
+          <th>Biến động T+2</th><th>Biến động T+5</th><th className="hide-sm">Dải giá T+5</th>
         </tr></thead>
         <tbody>{rows.map((item) => <tr key={item.symbol} className="click symbol-row" tabIndex={0} onClick={() => openSymbol(item.symbol, item.analysisEnabled)} onKeyDown={(event) => { if (event.key === 'Enter') openSymbol(item.symbol, item.analysisEnabled); }}>
           {canWatch && <td><button type="button" className={`watch-star ${watchlist.has(item.symbol) ? 'on' : ''}`} onClick={(event) => toggleWatch(event, item.symbol)} aria-pressed={watchlist.has(item.symbol)} aria-label={watchlist.has(item.symbol) ? `Bỏ ${item.symbol} khỏi watchlist` : `Thêm ${item.symbol} vào watchlist`}><Icon name="star" filled={watchlist.has(item.symbol)} /></button></td>}
@@ -122,8 +122,8 @@ export function OverviewPage() {
           <td className="r num hide-sm">{item.averageTurnover20d ? number.format(item.averageTurnover20d / 1e9) : '—'}</td>
           {item.analysisEnabled === false ? <td colSpan={3} className="small muted" title={NOT_ANALYSED}><span className="chip no-analysis">Chỉ giá</span> Chưa phân tích</td> : <>
             <td><MiniLab forecast={item.forecasts?.t2} /></td>
-            <td><MiniLab forecast={item.forecasts?.t5} />{conflict(item) && <> <span className="chip hold" title="T+2 và T+5 ngược chiều">Mâu thuẫn</span></>}</td>
-            <td className="hide-sm"><Confidence level={item.forecasts?.t5?.confidence} /></td></>}
+            <td><MiniLab forecast={item.forecasts?.t5} /></td>
+            <td className="hide-sm num small">{rangeText(item.forecasts?.t5?.range)}</td></>}
         </tr>)}
         {!rows.length && <tr><td colSpan={canWatch ? 9 : 8} className="muted">Không có mã khớp bộ lọc.</td></tr>}</tbody>
       </table></div>
@@ -132,11 +132,6 @@ export function OverviewPage() {
     <Disclaimer />
   </main>;
 }
-
-const conflict = (item) => {
-  const t2 = item.forecasts?.t2?.label; const t5 = item.forecasts?.t5?.label;
-  return (t2 === 'up' && t5 === 'down') || (t2 === 'down' && t5 === 'up');
-};
 
 function SortHeader({ label, sortKey, sort, onSort, align = '' }) {
   const active = sort.key === sortKey;

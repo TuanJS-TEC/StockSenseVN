@@ -1,7 +1,8 @@
 // FR-M12 Chat without a language model (SDD 5.3 fallback): input guard -> intent -> fixed retrieval ->
 // template answer with citations -> output filter. Every number in an answer comes from retrieved records.
 import { hasCapability } from '@stocksense/core/access';
-import { getForecastLabel } from '@stocksense/core/labels';
+import { getVolatilityLabel } from '@stocksense/core/labels';
+import { EXPERIMENTAL_FORECAST_NOTE } from '@stocksense/core/disclaimer';
 import { buildBoardQuote } from '@stocksense/core/price-board';
 import { changeOver, sma, rsi, macd } from '@stocksense/core/indicators';
 
@@ -144,7 +145,7 @@ export function createChatAssistant(deps) {
   async function aboutSymbol(symbol, norm, result) {
     const has = (re) => re.test(norm);
     if (has(/\b(vi sao|tai sao|ly do|giai thich|nguyen nhan)\b/) && has(/\b(du bao|nhan|tang|giam|di ngang)\b/)) {
-      return result('forecast_reason', `${NO_DATA} Hệ thống chưa có dữ liệu giải thích cho dự báo của ${symbol} (phần giải thích cần mô hình dự báo). Bạn có thể xem xác suất T+2/T+5 và tin tức của mã.`, [{ type: 'symbol', label: `Trang ${symbol}`, path: `/symbols/${symbol}` }]);
+      return result('forecast_reason', `${NO_DATA} Hệ thống chưa có dữ liệu giải thích cho dự báo của ${symbol} (phần giải thích cần mô hình dự báo). Bạn có thể xem mức biến động và dải giá T+2/T+5 và tin tức của mã.`, [{ type: 'symbol', label: `Trang ${symbol}`, path: `/symbols/${symbol}` }]);
     }
     if (has(/\b(hit rate|lich su du bao|do chinh xac|dung sai|ty le dung)\b/)) {
       return result('forecast_history', `${NO_DATA} Chưa có lịch sử dự báo đã đến hạn cho ${symbol}, nên chưa tính được hit rate.`);
@@ -192,16 +193,15 @@ export function createChatAssistant(deps) {
     const [detail, status] = await Promise.all([deps.market.symbol(symbol), deps.market.status()]);
     const t2 = detail?.forecasts?.t2; const t5 = detail?.forecasts?.t5;
     if (detail && detail.analysisEnabled === false) return result('forecast', `Hệ thống chưa hỗ trợ phân tích sâu mã này (${symbol}); hiện chỉ có giá cuối ngày trên Bảng giá.`);
-    if (!t2?.label && !t5?.label) return result('forecast', `${NO_DATA} Chưa có dự báo cho ${symbol}.`);
+    if (!t2?.riskLevel && !t5?.riskLevel) return result('forecast', `${NO_DATA} Chưa có dự báo cho ${symbol}.`);
+    const signed = (pct) => `${pct < 0 ? '−' : '+'}${Math.abs(pct * 100).toFixed(1).replace('.', ',')}%`;
     const describe = (name, f) => {
-      if (!f?.label) return `${name}: chưa có`;
-      const p = f.probabilities ?? {};
-      const share = (key) => `${Math.round((p[key] ?? 0) * 100)}%`;
-      const conf = { low: 'thấp', mid: 'trung bình', high: 'cao' }[f.confidence] ?? 'chưa có';
-      return `${name}: ${getForecastLabel(f.label).text} (Tăng ${share('up')}, Đi ngang ${share('hold')}, Giảm ${share('down')}; độ tin cậy ${conf})`;
+      if (!f?.riskLevel) return `${name}: chưa có`;
+      return `${name}: ${getVolatilityLabel(f.riskLevel).text}, dải giá ${Math.round(f.range.coverage * 100)}% từ ${signed(f.range.lowPct)} đến ${signed(f.range.highPct)} so với giá đóng cửa${f.stale ? ` (dự báo cũ ngày ${day(f.dataDate)})` : ''}`;
     };
-    const demo = status?.state === 'demo' ? ' Lưu ý: đây là dữ liệu dự báo mẫu vì mô hình chưa được triển khai.' : '';
-    const content = `Dự báo xu hướng của ${symbol} với ngày dữ liệu ${day(status?.dataDate)}: ${describe('T+2', t2)}; ${describe('T+5', t5)}.${demo} Dự báo chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.`;
+    const demo = status?.state === 'demo' ? ' Lưu ý: đây là dữ liệu dự báo mẫu vì mô hình chưa được triển khai.'
+      : status?.state === 'experimental' ? ` Lưu ý: ${EXPERIMENTAL_FORECAST_NOTE}.` : '';
+    const content = `Dự báo biến động của ${symbol} với ngày dữ liệu ${day(status?.dataDate)}: ${describe('T+2', t2)}; ${describe('T+5', t5)}. Mô hình ước lượng giá có thể đi xa bao nhiêu, không dự báo chiều tăng giảm.${demo} Dự báo chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.`;
     return result('forecast', content, [{ type: 'forecast', label: `Dự báo ${symbol} ngày ${day(status?.dataDate)}${status?.modelVersion ? ` · mô hình ${status.modelVersion}` : ''}`, date: status?.dataDate, path: `/symbols/${symbol}` }]);
   }
 

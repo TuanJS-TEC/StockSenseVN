@@ -419,3 +419,49 @@ a.brand { text-decoration: none; color: inherit; }
 .plegend .ic { width: 12px; height: 12px; stroke-width: 2.6; }
 .toast .ic { width: 15px; height: 15px; }
 .btn .ic { margin-right: 2px; }
+
+/* NLP news rows: compact head, click to open the model's detail panel. */
+.news article.nlp-item { display: block; padding: 0; }
+.nlp-head { padding: 12px 0; cursor: pointer; }
+.nlp-head h4 { margin: 0; }
+.nlp-title { all: unset; cursor: pointer; font-weight: 600; }
+.nlp-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nlp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.nlp-panel { padding: 0 0 12px; display: grid; gap: 8px; }
+.prob-bar { display: flex; height: 8px; overflow: hidden; border-radius: 20px; background: var(--surface-2); }
+.prob-bar i { display: block; height: 100%; }
+.prob-bar .up, .nlp-probs .dot.up { background: var(--up); }
+.prob-bar .hold, .nlp-probs .dot.hold { background: var(--hold); }
+.prob-bar .down, .nlp-probs .dot.down { background: var(--down); }
+.nlp-probs { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.nlp-probs .dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
+.nlp-passage { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.5; }
+/* Electronic price board: index strip + dense quote table with sticky header and symbol column. */
+.index-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.index-card { display: grid; gap: 4px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); min-width: 0; }
+.index-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.index-head small { font-size: 11px; }
+.index-chart { width: 100%; height: 56px; display: block; }
+.index-ref { stroke: var(--ref); stroke-dasharray: 4 3; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.index-line { fill: none; stroke: currentColor; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.index-breadth { display: flex; gap: 12px; font-weight: 600; }
+.board-scroll { overflow: auto; max-height: calc(100vh - 320px); min-height: 360px; margin: 0 -16px; border-top: 1px solid var(--line); }
+.eboard { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; white-space: nowrap; }
+.eboard th, .eboard td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+.eboard thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); color: var(--muted); font-weight: 600; text-align: center; }
+.eboard thead tr:nth-child(2) th { top: 25px; }
+.eboard .bd-sym { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left; font-weight: 700; }
+.eboard thead .bd-sym { z-index: 3; background: var(--surface-2); }
+.eboard .bd-ref, .eboard .bd-match { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.eboard .bd-strong { font-weight: 700; }
+.eboard .bd-tracked { margin-left: 3px; color: var(--muted); }
+.eboard tbody tr:hover td, .eboard tbody tr:hover th { background: var(--surface-2); }
+.eboard tr.click { cursor: pointer; }
+@keyframes board-flash { from { background: color-mix(in srgb, currentColor 25%, transparent); } to { background: transparent; } }
+.eboard td.flash { animation: board-flash 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .eboard td.flash { animation: none; } }
+@media (max-width: 720px) {
+  .board-scroll { max-height: none; } .eboard thead th { position: static; }
+  .index-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .index-card { padding: 8px; } .index-chart { height: 36px; }
+  .index-head { font-size: 12px; } .index-breadth { gap: 8px; }
+}

@@ -1,36 +1,34 @@
-import { getForecastLabel } from '@stocksense/core/labels';
-import { Icon } from '../app/icons.jsx';
+import { getVolatilityLabel, newsContext, rangePrices } from '@stocksense/core/labels';
+import { RISK_TEXT } from '@stocksense/core/news';
 
-// Forecast display pieces from the HTML prototype (`.lab`, `.conf`, `.fc`).
-export const CONFIDENCE = { low: [1, 'Thấp'], mid: [2, 'Trung bình'], high: [3, 'Cao'] };
-const percent = (value) => (value == null ? '—' : `${Math.round(value * 100)}%`);
-
-export function Lab({ label, children }) {
-  const forecast = getForecastLabel(label);
-  return <span className={`lab c-${forecast.tone}`}><Icon name={forecast.tone} />{forecast.text}{children}</span>;
-}
+// Forecast display pieces. A forecast is the model's volatility level and 80% price range (AI_Core rangecast): it says
+// how far the price may move, never which way.
+const formatDay = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('vi-VN') : '—');
+const signed = (pct) => `${pct < 0 ? '−' : '+'}${Math.abs(pct * 100).toFixed(1).replace('.', ',')}%`;
+const price = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+export const rangeText = (range) => (range ? `${signed(range.lowPct)} / ${signed(range.highPct)}` : '—');
 
 export function MiniLab({ forecast }) {
-  if (!forecast?.label) return <span className="muted">—</span>;
-  return <><Lab label={forecast.label} /> <span className="num muted small">{percent(forecast.probabilities?.[forecast.label])}</span></>;
+  if (!forecast?.riskLevel) return <span className="muted">—</span>;
+  const level = getVolatilityLabel(forecast.riskLevel);
+  return <><span className={`chip ${level.tone}`} title={`${level.text}; dải giá 80%: ${rangeText(forecast.range)}`}>{level.symbol} {level.short}</span>{forecast.stale && <span className="muted small" title={`Dự báo cũ ngày ${formatDay(forecast.dataDate)}`}> · cũ</span>}</>;
 }
 
-export function Confidence({ level }) {
-  const [lv, text] = CONFIDENCE[level] ?? [0, 'Chưa có'];
-  return <><span className={`conf lv${lv}`} title={`Mức tin cậy ${text}`}><i /><i /><i /></span> <span>{text}</span></>;
-}
-
-export function ForecastCard({ horizon, forecast, dueDate }) {
-  const p = forecast?.probabilities ?? {};
-  const top = forecast?.label ? p[forecast.label] : null;
-  const label = getForecastLabel(forecast?.label);
+// changePercent is the page's day change (news context). The band is stored as returns on the close of the forecast's
+// own session (forecast.baseClose), never on the page's latest price, which may be a later session or intraday.
+export function ForecastCard({ horizon, forecast, dueDate, changePercent }) {
+  const level = getVolatilityLabel(forecast?.riskLevel);
+  const band = rangePrices(forecast?.baseClose, forecast?.range);
+  const flags = forecast?.news?.riskFlags ?? [];
   return <div className="fc">
-    <div className="fc-h"><span className="hz">{horizon === 't2' ? 'T+2' : 'T+5'}</span><span className="small muted">Đáo hạn <span className="num">{dueDate ? new Date(`${dueDate}T00:00:00`).toLocaleDateString('vi-VN') : '—'}</span></span></div>
-    <div className={`fc-label c-${label.tone}`}><Icon name={label.tone} /> {label.text} <span className="pct">{percent(top)}</span></div>
-    <div className="pbar" role="img" aria-label={`Tăng ${percent(p.up)}, Đi ngang ${percent(p.hold)}, Giảm ${percent(p.down)}`}>
-      <i className="bg-up" style={{ width: `${(p.up ?? 0) * 100}%` }} /><i className="bg-hold" style={{ width: `${(p.hold ?? 0) * 100}%` }} /><i className="bg-down" style={{ width: `${(p.down ?? 0) * 100}%` }} />
-    </div>
-    <div className="plegend num"><span className="c-up"><Icon name="up" /> {percent(p.up)}</span><span className="c-hold"><Icon name="hold" /> {percent(p.hold)}</span><span className="c-down"><Icon name="down" /> {percent(p.down)}</span></div>
-    <div className="fc-f"><Confidence level={forecast?.confidence} />{top != null && top < 0.45 && <span className="chip hold">Độ tin cậy thấp</span>}</div>
+    <div className="fc-h"><span className="hz">{horizon === 't2' ? 'T+2' : 'T+5'}</span><span className="small muted">Đáo hạn <span className="num">{formatDay(dueDate)}</span></span></div>
+    <div className="fc-label c-hold">{level.symbol} {level.text}</div>
+    {forecast?.range ? <>
+      <div className="num">Dải giá {Math.round(forecast.range.coverage * 100)}%: {band ? <b>{price.format(band.low)} – {price.format(band.high)}</b> : '—'} <span className="muted small">({rangeText(forecast.range)})</span></div>
+      <div className="small muted">{band ? <>Tính trên giá đóng cửa <span className="num">{price.format(forecast.baseClose)}</span> phiên {formatDay(forecast.dataDate)}</>
+        : <>Chờ cập nhật giá phiên {formatDay(forecast.dataDate)} để quy ra giá</>}</div>
+      <div className="small muted">{newsContext(forecast.news, changePercent)}</div>
+      <div className="fc-f">{flags.length > 0 && <span className="chip down">Cờ rủi ro trong tin: {flags.map((flag) => RISK_TEXT[flag] ?? flag).join(', ')}</span>}{forecast.stale && <span className="chip down">Dự báo cũ · {formatDay(forecast.dataDate)}</span>}</div>
+    </> : <div className="small muted">Chưa có dự báo cho kỳ hạn này.</div>}
   </div>;
 }

@@ -3,6 +3,7 @@ import { api } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { hasCapability } from '@stocksense/core/access';
 import { calculateRiskReward } from '@stocksense/core/calc';
+import { rangePrices, stopFromRange } from '@stocksense/core/labels';
 import { navigate } from '../../app/navigation.js';
 import { Disclaimer, Icon } from '../../app/icons.jsx';
 import { Modal } from '../../app/Modal.jsx';
@@ -42,6 +43,15 @@ export function PlansPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // Latest close and T+5 price range of the symbol being planned: a hint for the stop, never applied on its own.
+  const [rangeInfo, setRangeInfo] = useState(null);
+  useEffect(() => {
+    let active = true;
+    setRangeInfo(null);
+    if (form.symbol.length < 3) return undefined;
+    api.symbols.detail(form.symbol).then((detail) => { if (active) setRangeInfo({ t5: detail.forecasts?.t5 ?? null }); }).catch(() => {});
+    return () => { active = false; };
+  }, [form.symbol]);
 
   async function refresh() { const result = await api.plans.list(); setPlans(result.items); return result.items; }
   useEffect(() => {
@@ -140,7 +150,9 @@ export function PlansPage() {
             <div className="field"><label htmlFor="pl-side">Hướng</label><select id="pl-side" disabled={selected !== 'new'} value={form.side} onChange={(e) => update('side', e.target.value)}><option value="long">Mua</option><option value="short">Bán</option></select></div>
             <div className="field"><label htmlFor="pl-e1">Vùng vào từ</label><input id="pl-e1" className="num" type="number" required min="0.0001" step="0.0001" value={form.entry_price} onChange={(e) => update('entry_price', e.target.value)} /></div>
             <div className="field"><label htmlFor="pl-e2">đến</label><input id="pl-e2" className="num" type="number" min="0.0001" step="0.0001" value={form.entry_price_max} onChange={(e) => update('entry_price_max', e.target.value)} /><span className="hint">tùy chọn</span></div>
-            <div className="field"><label htmlFor="pl-sl">Cắt lỗ</label><input id="pl-sl" className="num" type="number" required min="0.0001" step="0.0001" value={form.stop_price} onChange={(e) => update('stop_price', e.target.value)} /></div>
+            <div className="field"><label htmlFor="pl-sl">Cắt lỗ</label><input id="pl-sl" className="num" type="number" required min="0.0001" step="0.0001" value={form.stop_price} onChange={(e) => update('stop_price', e.target.value)} />
+              {(() => { const band = rangePrices(rangeInfo?.t5?.baseClose, rangeInfo?.t5?.range); const stop = stopFromRange(form.side, rangeInfo?.t5?.baseClose, rangeInfo?.t5);
+                return band && <span className="hint">Dải giá 80% T+5: <span className="num">{money.format(band.low)} – {money.format(band.high)}</span> <button type="button" className="text-button" onClick={() => update('stop_price', String(stop))}>Dùng cận {form.side === 'long' ? 'dưới' : 'trên'} ({money.format(stop)})</button></span>; })()}</div>
             <div className="field"><label htmlFor="pl-tp">Mục tiêu</label><input id="pl-tp" className="num" type="number" required min="0.0001" step="0.0001" value={form.target_price} onChange={(e) => update('target_price', e.target.value)} /></div>
             <div className="field"><label htmlFor="pl-q">Khối lượng dự kiến</label><input id="pl-q" className="num" type="number" min="1" step="1" value={form.quantity} onChange={(e) => update('quantity', e.target.value)} /><span className="hint">cp, tùy chọn</span></div>
             <div className="field"><label htmlFor="pl-exp">Hết hạn</label><input id="pl-exp" type="date" value={form.expires_on} onChange={(e) => update('expires_on', e.target.value)} /><span className="hint">tùy chọn</span></div>

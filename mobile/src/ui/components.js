@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowDown, ArrowUp, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { getForecastLabel } from '@stocksense/core/labels';
-import { DEMO_FORECAST_NOTE, DISCLAIMER } from '@stocksense/core/disclaimer';
+import { DISCLAIMER, forecastStateNote } from '@stocksense/core/disclaimer';
 import { useTheme } from './theme';
 import { formatChange, formatDay, formatPercent } from './format';
 
@@ -110,7 +110,7 @@ export function DataStamp({ status }) {
       <Text style={{ color: c.muted, fontSize: 12 }}>
         Giá đến phiên {formatDay(status.latestPriceDate)} · Dự báo tính cho phiên {formatDay(status.dataDate)}
       </Text>
-      {status.state === 'demo' && <View style={{ flexDirection: 'row' }}><Chip tone="hold">{DEMO_FORECAST_NOTE}</Chip></View>}
+      {forecastStateNote(status.state) && <View style={{ flexDirection: 'row' }}><Chip tone="hold">{forecastStateNote(status.state)}</Chip></View>}
     </View>
   );
 }

@@ -16,7 +16,7 @@ const BOARD = {
     .map(([symbol, exchange, industry]) => ({ symbol, exchange, industry, tones: { close: 'ref' } })),
 };
 const FORECASTS = {
-  FPT: { t2: { label: 'up', confidence: 'high', probabilities: { up: 0.62, hold: 0.23, down: 0.15 } }, t5: { label: 'hold', confidence: 'low', probabilities: { up: 0.31, hold: 0.44, down: 0.25 } } },
+  FPT: { t2: { riskLevel: 'low', range: { lowPct: -0.021, highPct: 0.02, coverage: 0.8 } }, t5: { riskLevel: 'high', range: { lowPct: -0.056, highPct: 0.057, coverage: 0.8 } } },
   GAS: { t2: null, t5: null },
 };
 const NEWS = { FPT: [{ title: 'FPT ký hợp đồng mới', source: 'CafeF', publishedAt: '2026-10-29T08:00:00.000Z', url: 'https://cafef.vn/fpt-1' }], HUT: [] };
@@ -60,8 +60,8 @@ describe('chat factual answers quote stored data', () => {
     ['fpt', 'price', ['52.700']],
     ['HUT biến động thế nào', 'price', ['HNX', '12.500']],
     ['Giá BSR', 'price', ['UPCOM']],
-    ['Dự báo T+5 của FPT', 'forecast', ['Đi ngang', '44%', 'Tăng 62%', 'dữ liệu dự báo mẫu']],
-    ['FPT xu hướng thế nào', 'forecast', ['T+2: Tăng']],
+    ['Dự báo T+5 của FPT', 'forecast', ['T+5: Biến động cao', '−5,6% đến +5,7%', 'dải giá 80%', 'không dự báo chiều tăng giảm', 'dữ liệu dự báo mẫu']],
+    ['FPT xu hướng thế nào', 'forecast', ['T+2: Biến động thấp', '−2,1% đến +2,0%']],
     ['Tin mới về FPT', 'news', ['FPT ký hợp đồng mới', 'CafeF']],
     ['RSI của FPT', 'technical', ['RSI(14)', 'MA20']],
     ['VN-Index hôm nay thế nào?', 'market', ['1.741,62', '13 mã giảm']],
@@ -158,5 +158,19 @@ describe('chat trap questions are refused or answered with NO_DATA', () => {
       expect(reply.content).toBe(REFUSAL);
     }
     expect(filterOutput({ content: 'RSI dưới 30, vùng quá bán theo quy ước', status: 'complete' }).status).toBe('complete');
+  });
+});
+
+describe('chat forecast notes for experimental and stale forecasts', () => {
+  const stale = { riskLevel: 'normal', range: { lowPct: -0.03, highPct: 0.03, coverage: 0.8 }, dataDate: '2026-11-11', stale: true };
+  const experimental = createChatAssistant({ ...deps, market: { ...market,
+    symbol: async (symbol) => ({ symbol, analysisEnabled: true, forecasts: { t2: stale, t5: stale } }),
+    status: async () => ({ state: 'experimental', dataDate: '2026-11-12', modelVersion: 'rangecast-v1' }) } });
+
+  it('says the model is experimental and which forecasts are old', async () => {
+    const answer = await experimental.answer({ user: trader, question: 'Dự báo FPT' });
+    expect(answer.content).toMatch(/thử nghiệm/);
+    expect(answer.content).toMatch(/dự báo cũ ngày 11\/11\/2026/);
+    expect(answer.content).not.toMatch(/dữ liệu dự báo mẫu/);
   });
 });

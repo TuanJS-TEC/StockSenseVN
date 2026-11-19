@@ -26,6 +26,10 @@ import { createNotificationPreferencesRepository, createNotificationChannelsRepo
 import { emailProviderConfigured, telegramProviderConfigured, sendVerificationEmail, sendPasswordResetEmail, sendRegistrationVerificationEmail, sendAccountAlreadyExistsEmail, sendTestEmail, sendTelegramMessage } from './notifications/providers.js';
 import { ApiError } from './errors.js';
 import { createFixtureMarketRepository, createPostgresMarketRepository, PRICE_RANGES } from './market/repository.js';
+import { parseRange } from './market/nlp-news.js';
+import { createNewsHub, startNewsListener } from './market/news-hub.js';
+import { startLiveBoard } from './market/live-board.js';
+import { startPriceCatchup } from './market/price-catchup.js';
 import { createPdfReport, formatReportValue } from './reports/pdf.js';
 
 if (process.env.NODE_ENV === 'production') {
@@ -43,6 +47,15 @@ function formatRetryAfterVi(ttlMs) {
 
 const app = Fastify({ logger: true, genReqId: () => randomUUID() });
 const market = databaseEnabled ? createPostgresMarketRepository(pool) : createFixtureMarketRepository();
+// Electronic board from SSI iBoard (all listed stocks + index cards). LIVE_BOARD_INTERVAL_MS=0 turns polling off.
+// Today's quotes also overlay the tracked-symbol board so summary breadth and chat see them; fixture mode keeps
+// demo prices, which have no real previous session to anchor quotes to.
+const liveBoardInterval = Number(process.env.LIVE_BOARD_INTERVAL_MS ?? 3000);
+const liveBoard = liveBoardInterval > 0 ? startLiveBoard({ intervalMs: liveBoardInterval, logger: app.log }) : null;
+if (liveBoard && databaseEnabled) {
+  const eodBoard = market.board.bind(market);
+  market.board = async () => liveBoard.merge(await eodBoard());
+}
 const postgresAuth = databaseEnabled ? createPostgresAuthRepository(pool) : null;
 const passwordResets = databaseEnabled ? createPasswordResetRepository(pool) : null;
 const registration = databaseEnabled ? createRegistrationRepository(pool) : null;
@@ -654,8 +667,23 @@ app.get('/api/v1/market/summary', { preHandler: requireCapability('market.read')
   const data = await market.summary();
   return data ? envelope(data) : dataNotReady(reply, request);
 });
-// End-of-day price board for the enabled symbols (not real-time).
+// Tracked-symbol board (with forecasts): end-of-day rows, overlaid with SSI intraday quotes during the session.
 app.get('/api/v1/market/board', { preHandler: requireCapability('symbols.read') }, async () => envelope(await market.board()));
+// Electronic board snapshot: every listed stock with 3-level bid/ask, matched trade and foreign flows, plus index cards.
+app.get('/api/v1/market/live', { preHandler: requireCapability('symbols.read') }, async () =>
+  envelope(liveBoard?.snapshot() ?? { updatedAt: null, vn30: [], indices: [], rows: [] }));
+// Server-Sent Events: `board` carries { updatedAt, rows (changed only), indices? } after each SSI poll.
+// ponytail: every client gets every changed row (~1.5k symbols); filter per tab server-side if bandwidth matters.
+app.get('/api/v1/market/live/stream', { preHandler: requireCapability('symbols.read') }, (request, reply) => {
+  reply.hijack();
+  const res = reply.raw;
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+  res.on('error', () => {}); // a write to a half-closed socket must not crash the process; 'close' cleans up
+  res.write(': connected\n\n');
+  const unsubscribe = liveBoard?.subscribe((update) => res.write(`event: board\ndata: ${JSON.stringify(update)}\n\n`));
+  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+  request.raw.on('close', () => { clearInterval(ping); unsubscribe?.(); });
+});
 
 app.get('/api/v1/symbols', { preHandler: requireCapability('symbols.read') }, async (request, reply) => {
   const q = typeof request.query.q === 'string' ? request.query.q.trim().toUpperCase() : '';
@@ -771,7 +799,7 @@ function parseJournalFilters(query) {
 async function sendPdf(reply, filename, report) {
   const status = await market.status();
   const meta = status
-    ? `Ngày dữ liệu: ${status.dataDate} · Phiên bản mô hình: ${status.modelVersion}${status.state === 'demo' ? ' (dữ liệu mẫu, mô hình AI chưa triển khai)' : ''}`
+    ? `Ngày dữ liệu: ${status.dataDate} · Phiên bản mô hình: ${status.modelVersion}${status.state === 'demo' ? ' (dữ liệu mẫu, mô hình AI chưa triển khai)' : status.state === 'experimental' ? ' (mô hình thử nghiệm, hướng Tăng/Giảm chưa được kiểm chứng)' : ''}`
     : 'Ngày dữ liệu: chưa có batch dữ liệu thị trường';
   const pdf = await createPdfReport({ ...report, meta });
   return reply.header('Content-Type', 'application/pdf')
@@ -876,6 +904,31 @@ app.get('/api/v1/symbols/:symbol/news', { preHandler: requireCapability('news.re
   return data ? envelope(data) : fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy mã cổ phiếu.');
 });
 
+app.get('/api/v1/symbols/:symbol/nlp-news', { preHandler: requireCapability('news.read') }, async (request, reply) => {
+  const range = parseRange(request.query, new Date());
+  if (!range) return fail(reply, request, 400, 'INVALID_RANGE', 'Khoảng ngày không hợp lệ (from/to dạng YYYY-MM-DD, from <= to).');
+  const data = await market.nlpNews(request.params.symbol, range);
+  return data ? envelope(data) : fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy mã cổ phiếu.');
+});
+
+// Server-Sent Events: tells the browser to refetch when the bridge reports new NLP news for this symbol.
+app.get('/api/v1/symbols/:symbol/nlp-news/stream', { preHandler: requireCapability('news.read') }, (request, reply) => {
+  const symbol = request.params.symbol.toUpperCase();
+  reply.hijack();
+  const res = reply.raw;
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+  res.on('error', () => {}); // a write to a half-closed socket must not crash the process; 'close' cleans up
+  res.write(': connected\n\n');
+  const unsubscribe = newsHub.subscribe(symbol, () => res.write(`event: news\ndata: ${JSON.stringify({ symbol })}\n\n`));
+  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+  request.raw.on('close', () => { clearInterval(ping); unsubscribe(); });
+});
+
+app.get('/api/v1/symbols/:symbol/nlp-news/times', { preHandler: requireCapability('news.read') }, async (request, reply) => {
+  const data = await market.nlpNewsTimes(request.params.symbol);
+  return data ? envelope(data) : fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy mã cổ phiếu.');
+});
+
 app.get('/api/v1/watchlist', { preHandler: [requireCapability('watchlist.manage.self'), requirePersonalStore] }, async (request) =>
   envelope(await personalMarketTools.list(request.user.id)));
 app.put('/api/v1/watchlist/:symbol', { preHandler: [requireCapability('watchlist.manage.self'), requirePersonalStore] }, async (request, reply) => {
@@ -932,7 +985,11 @@ app.patch('/api/v1/alerts/:id', { preHandler: [requireCapability('alerts.inbox.r
 
 app.setNotFoundHandler((request, reply) => fail(reply, request, 404, 'NOT_FOUND', 'Không tìm thấy endpoint.'));
 
-app.addHook('onClose', async () => { if (pool) await pool.end(); });
+const newsHub = createNewsHub();
+const newsListener = databaseEnabled ? startNewsListener(pool, newsHub) : null;
+// Fills missing end-of-day sessions so forecast bands can anchor on their own session's close. PRICE_CATCHUP=off disables.
+const priceCatchup = databaseEnabled && process.env.PRICE_CATCHUP !== 'off' ? startPriceCatchup(pool, { logger: app.log }) : null;
+app.addHook('onClose', async () => { priceCatchup?.stop(); liveBoard?.stop(); await newsListener?.stop(); if (pool) await pool.end(); });
 const port = Number(process.env.API_PORT || 3000);
 if (pool) await pool.query('SELECT 1');
 await app.listen({ port, host: process.env.API_HOST || '127.0.0.1' });

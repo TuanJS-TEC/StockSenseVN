@@ -7,6 +7,7 @@
     "./access": "./src/access/roles.js",
     "./labels": "./src/labels/forecast.js",
     "./disclaimer": "./src/labels/disclaimer.js",
+    "./news": "./src/labels/news.js",
     "./calc": "./src/calc/riskReward.js",
     "./price-board": "./src/market/priceBoard.js",
     "./indicators": "./src/market/indicators.js",
